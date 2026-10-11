@@ -1,5 +1,5 @@
 // ============================================
-// GAME.JS — M2 FINAL
+// GAME.JS — FINAL
 // ============================================
 
 const canvas = document.getElementById('gameCanvas');
@@ -16,21 +16,22 @@ resizeCanvas();
 const game = {
   running: false,
   player: null,
-  camera: { x: 0, y: 0, w: 0, h: 0, zoom: 0.35, targetZoom: 0.35 },
+  camera: { x: 0, y: 0, w: 0, h: 0, zoom: 1.0, targetZoom: 1.0 },
   keys: {},
   move: { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 },
   aim:  { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 },
-  buttons: { run: false, jump: false, swim: false, surf: false },
-  lastTime: 0
+  buttons: { run: false, jump: false },
+  lastTime: 0,
+  lastZone: null
 };
 
-const SPEED = { walk: 300, run: 450, wade: 120, swim: 240, surf: 300 };
+const SPEED = { walk: 240, run: 360 };
 
 function createPlayer(config, spawn) {
   return {
     x: spawn.x, y: spawn.y, vx: 0, vy: 0,
-    radius: 22, angle: 0,
-    state: 'walk', inWater: false,
+    radius: 14, angle: 0,
+    state: 'walk',
     z: 0, vz: 0,
     name: config.playerName || 'PLAYER',
     color: '#ff8a3d'
@@ -40,8 +41,8 @@ function createPlayer(config, spawn) {
 window.addEventListener('keydown', e => game.keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup',   e => game.keys[e.key.toLowerCase()] = false);
 window.addEventListener('keydown', e => {
-  if (e.key === '+' || e.key === '=') game.camera.targetZoom = Math.min(1.2, game.camera.targetZoom + 0.1);
-  if (e.key === '-') game.camera.targetZoom = Math.max(0.15, game.camera.targetZoom - 0.1);
+  if (e.key === '+' || e.key === '=') game.camera.targetZoom = Math.min(3.0, game.camera.targetZoom + 0.2);
+  if (e.key === '-') game.camera.targetZoom = Math.max(0.4, game.camera.targetZoom - 0.2);
 });
 
 function bindJoystick(baseEl, stickEl, ref, maxR) {
@@ -94,13 +95,11 @@ function setupControls() {
   };
   btn('btnRun', 'run');
   btn('btnJump', 'jump');
-  btn('btnSwim', 'swim');
-  btn('btnSurf', 'surf');
 
-  const zIn = document.getElementById('zoomIn');
+  const zIn  = document.getElementById('zoomIn');
   const zOut = document.getElementById('zoomOut');
-  if (zIn)  zIn.addEventListener('click',  () => game.camera.targetZoom = Math.min(1.2, game.camera.targetZoom + 0.15));
-  if (zOut) zOut.addEventListener('click', () => game.camera.targetZoom = Math.max(0.15, game.camera.targetZoom - 0.15));
+  if (zIn)  zIn.addEventListener('click',  () => game.camera.targetZoom = Math.min(3.0, game.camera.targetZoom + 0.2));
+  if (zOut) zOut.addEventListener('click', () => game.camera.targetZoom = Math.max(0.4, game.camera.targetZoom - 0.2));
 }
 
 function update(dt) {
@@ -118,28 +117,17 @@ function update(dt) {
   const mag = Math.hypot(ix, iy);
   if (mag > 1) { ix /= mag; iy /= mag; }
 
-  // Jump
-  if (game.buttons.jump && p.z === 0 && p.vz === 0) { p.vz = 420; }
+  if (game.buttons.jump && p.z === 0 && p.vz === 0) p.vz = 260;
   game.buttons.jump = false;
 
   if (p.vz !== 0 || p.z > 0) {
     p.z += p.vz * dt;
-    p.vz -= 1400 * dt;
+    p.vz -= 900 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
 
-  const zone = window.MAP.getZoneAt(p.x, p.y);
-  p.inWater = !!(zone && zone.water);
-
-  if (p.inWater) {
-    if (game.buttons.surf) p.state = 'surf', p.speed = SPEED.surf;
-    else if (game.buttons.swim) p.state = 'swim', p.speed = SPEED.swim;
-    else p.state = 'wade', p.speed = SPEED.wade;
-  } else if (game.buttons.run) {
-    p.state = 'run'; p.speed = SPEED.run;
-  } else {
-    p.state = 'walk'; p.speed = SPEED.walk;
-  }
+  if (game.buttons.run) { p.state = 'run'; p.speed = SPEED.run; }
+  else { p.state = 'walk'; p.speed = SPEED.walk; }
   if (p.z > 0) p.state = 'jump';
 
   p.vx = ix * p.speed;
@@ -150,21 +138,43 @@ function update(dt) {
   p.y = Math.max(20, Math.min(window.MAP.WORLD_H - 20, p.y));
   if (mag > 0.1) p.angle = Math.atan2(iy, ix);
 
+  // Camera
   const z = game.camera.zoom;
   const vw = canvas.width / z, vh = canvas.height / z;
   game.camera.w = vw; game.camera.h = vh;
   game.camera.x = Math.max(0, Math.min(window.MAP.WORLD_W - vw, p.x - vw / 2));
   game.camera.y = Math.max(0, Math.min(window.MAP.WORLD_H - vh, p.y - vh / 2));
 
+  // Zone detection + popup
+  const zone = window.MAP.getZoneAt(p.x, p.y);
   const zn = document.getElementById('zoneName');
   if (zn) zn.textContent = zone ? zone.name : '';
   const st = document.getElementById('stateLabel');
   if (st) st.textContent = p.state.toUpperCase();
 
-  const swimBtn = document.getElementById('btnSwim');
-  const surfBtn = document.getElementById('btnSurf');
-  if (swimBtn) swimBtn.style.display = p.inWater ? 'flex' : 'none';
-  if (surfBtn) surfBtn.style.display = p.inWater ? 'flex' : 'none';
+  if (zone && zone.id !== game.lastZone) {
+    game.lastZone = zone.id;
+    showZonePopup(zone);
+  }
+  if (!zone) game.lastZone = null;
+}
+
+function showZonePopup(zone) {
+  let el = document.getElementById('zonePopup');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'zonePopup';
+    el.className = 'zone-popup';
+    document.getElementById('gameScreen').appendChild(el);
+  }
+  const photo = window.MAP.imageCache['photo_' + zone.id];
+  el.innerHTML = `
+    <div class="zone-popup-name">${zone.name}</div>
+    ${photo ? `<img src="${photo.src}" class="zone-popup-img">` : ''}
+  `;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
 function render() {
@@ -173,27 +183,26 @@ function render() {
 
   const cam = game.camera;
   const z = cam.zoom;
-
   window.MAP.drawWorld(ctx, cam, z);
 
   const p = game.player;
   if (p) {
     const sx = (p.x - cam.x) * z;
-    const sy = (p.y - cam.y) * z - p.z * z;
+    const sy = (p.y - cam.y) * z - p.z * z * 0.5;
     const r  = p.radius * z;
 
     ctx.save();
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.ellipse((p.x - cam.x) * z, (p.y - cam.y) * z + r * 0.6, r * 0.9, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse((p.x - cam.x) * z, (p.y - cam.y) * z + r * 0.4, r * 0.9, r * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate(p.angle + Math.PI / 2);
-    ctx.fillStyle = p.inWater ? '#3d6ea8' : p.color;
+    ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
@@ -202,17 +211,17 @@ function render() {
     ctx.stroke();
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(0, -r * 0.6, 4 * z, 0, Math.PI * 2);
+    ctx.arc(0, -r * 0.6, Math.max(2, 3.5 * z), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
-    ctx.font = `bold ${Math.max(10, 14 * z)}px Arial`;
+    ctx.font = `bold ${Math.max(10, 13 * z)}px Arial`;
     ctx.textAlign = 'center';
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#000';
     ctx.fillStyle = '#fff';
-    const nameY = sy - r - 12 * z;
+    const nameY = sy - r - 10 * z;
     ctx.strokeText(p.name, sx, nameY);
     ctx.fillText(p.name, sx, nameY);
     ctx.restore();
