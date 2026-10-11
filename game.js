@@ -220,7 +220,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 // ===== SOCKET =====
-const socket = io();
+const socket = io('https://karnal-royale.onrender.com');
 
 socket.on('connect', () => statusEl.classList.add('hidden'));
 socket.on('disconnect', () => {
