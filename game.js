@@ -1,111 +1,273 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<title>Karnal Royale</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
+// ============================================
+// GAME.JS — M2 FINAL
+// ============================================
 
-<div id="rotateOverlay" class="rotate-overlay hidden">
-  <div class="rotate-inner">
-    <div class="rotate-phone">📱</div>
-    <h2>ROTATE YOUR PHONE</h2>
-    <p>Karnal Royale plays in landscape</p>
-  </div>
-</div>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-<!-- INTRO -->
-<div id="introOverlay" class="intro-overlay">
-  <canvas id="particleCanvas"></canvas>
-  <div id="phase1" class="intro-phase">
-    <h1 class="intro-title"><span class="karnal">KARNAL</span><span class="royale">ROYALE</span></h1>
-    <div class="intro-sub">SEASON 01</div>
-  </div>
-  <div id="phase2" class="intro-phase hidden">
-    <img id="planeImg" src="assets/plane.png" alt="plane" class="plane-img">
-  </div>
-  <div id="phase3" class="intro-phase hidden">
-    <div class="powered-by">POWERED BY</div>
-    <div class="vaan">VAAN CONSULTANCY</div>
-  </div>
-  <button id="skipIntro" class="skip-btn">SKIP ▶</button>
-</div>
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+resizeCanvas();
 
-<!-- LOBBY -->
-<div id="lobbyOverlay" class="lobby-overlay hidden">
-  <img src="assets/loby.png" alt="lobby" class="lobby-bg">
-  <div class="lobby-dark"></div>
-  <div class="lobby-top">
-    <div class="player-card">
-      <div class="player-avatar"></div>
-      <input id="playerName" class="player-name-input" type="text" maxlength="14" placeholder="YOUR NAME" value="PLAYER">
-    </div>
-    <div class="lobby-logo"><span class="karnal">KARNAL</span><span class="royale">ROYALE</span></div>
-    <button id="lobbySettings" class="icon-btn">⚙</button>
-  </div>
-  <div class="lobby-center">
-    <div class="char-panel">
-      <div class="char-label">SELECT CHARACTER</div>
-      <div id="charStrip" class="char-strip"></div>
-      <div id="charName" class="char-name">MAN BLUE</div>
-    </div>
-    <div class="mode-panel">
-      <div class="mode-label">SELECT MODE</div>
-      <button class="mode-btn" data-mode="bots"><span class="mode-icon">🤖</span><span class="mode-name">PLAY WITH BOTS</span><span class="mode-sub">19 bots · full map</span></button>
-      <button class="mode-btn" data-mode="friends"><span class="mode-icon">👥</span><span class="mode-name">PLAY WITH FRIENDS</span><span class="mode-sub">room code · private</span></button>
-      <button class="mode-btn" data-mode="hybrid"><span class="mode-icon">⚔</span><span class="mode-name">HYBRID</span><span class="mode-sub">friends + bots fill</span></button>
-      <button class="mode-btn" data-mode="quick"><span class="mode-icon">⚡</span><span class="mode-name">QUICK MATCH</span><span class="mode-sub">2-min queue</span></button>
-      <button class="mode-btn" data-mode="team"><span class="mode-icon">🛡</span><span class="mode-name">TEAM MODE</span><span class="mode-sub">next: 1v1</span></button>
-    </div>
-  </div>
-  <div class="lobby-footer">
-    <div class="powered-tag">POWERED BY VAAN CONSULTANCY</div>
-    <button id="startBtn" class="start-btn">▶  DEPLOY</button>
-  </div>
-</div>
+const game = {
+  running: false,
+  player: null,
+  camera: { x: 0, y: 0, w: 0, h: 0, zoom: 0.35, targetZoom: 0.35 },
+  keys: {},
+  move: { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 },
+  aim:  { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 },
+  buttons: { run: false, jump: false, swim: false, surf: false },
+  lastTime: 0
+};
 
-<!-- GAME -->
-<div id="gameScreen" class="game-screen hidden">
-  <canvas id="gameCanvas"></canvas>
+const SPEED = { walk: 300, run: 450, wade: 120, swim: 240, surf: 300 };
 
-  <div class="hud-top">
-    <div id="zoneName" class="hud-zone"></div>
-    <div id="stateLabel" class="hud-state">WALK</div>
-  </div>
+function createPlayer(config, spawn) {
+  return {
+    x: spawn.x, y: spawn.y, vx: 0, vy: 0,
+    radius: 22, angle: 0,
+    state: 'walk', inWater: false,
+    z: 0, vz: 0,
+    name: config.playerName || 'PLAYER',
+    color: '#ff8a3d'
+  };
+}
 
-  <!-- Zoom buttons (top right) -->
-  <div class="zoom-wrap">
-    <button id="zoomIn"  class="zoom-btn">＋</button>
-    <button id="zoomOut" class="zoom-btn">−</button>
-  </div>
+window.addEventListener('keydown', e => game.keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup',   e => game.keys[e.key.toLowerCase()] = false);
+window.addEventListener('keydown', e => {
+  if (e.key === '+' || e.key === '=') game.camera.targetZoom = Math.min(1.2, game.camera.targetZoom + 0.1);
+  if (e.key === '-') game.camera.targetZoom = Math.max(0.15, game.camera.targetZoom - 0.1);
+});
 
-  <!-- Move joystick (left) -->
-  <div id="joyBase" class="joy-base">
-    <div id="joyStick" class="joy-stick"></div>
-  </div>
+function bindJoystick(baseEl, stickEl, ref, maxR) {
+  if (!baseEl || !stickEl) return;
+  const getR = () => baseEl.getBoundingClientRect();
+  const start = e => {
+    const t = e.touches ? e.touches[0] : e;
+    const r = getR();
+    ref.active = true;
+    ref.id = t.identifier ?? 'mouse';
+    ref.baseX = r.left + r.width / 2;
+    ref.baseY = r.top + r.height / 2;
+    move(e);
+  };
+  const move = e => {
+    if (!ref.active) return;
+    let t = e.touches ? Array.from(e.touches).find(tt => tt.identifier === ref.id) : e;
+    if (!t) return;
+    const dx = t.clientX - ref.baseX, dy = t.clientY - ref.baseY;
+    const dist = Math.min(Math.hypot(dx, dy), maxR);
+    const ang = Math.atan2(dy, dx);
+    const sx = Math.cos(ang) * dist, sy = Math.sin(ang) * dist;
+    stickEl.style.transform = `translate(calc(-50% + ${sx}px), calc(-50% + ${sy}px))`;
+    ref.dx = sx / maxR; ref.dy = sy / maxR;
+  };
+  const end = () => {
+    ref.active = false; ref.dx = 0; ref.dy = 0;
+    stickEl.style.transform = 'translate(-50%, -50%)';
+  };
+  baseEl.addEventListener('touchstart', e => { e.preventDefault(); start(e); }, { passive: false });
+  baseEl.addEventListener('touchmove',  e => { e.preventDefault(); move(e); },  { passive: false });
+  baseEl.addEventListener('touchend', end);
+  baseEl.addEventListener('touchcancel', end);
+  baseEl.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+}
 
-  <!-- Aim joystick (right) -->
-  <div id="aimBase" class="joy-base aim-base">
-    <div id="aimStick" class="joy-stick aim-stick"></div>
-  </div>
+function setupControls() {
+  bindJoystick(document.getElementById('joyBase'), document.getElementById('joyStick'), game.move, 55);
+  bindJoystick(document.getElementById('aimBase'), document.getElementById('aimStick'), game.aim, 55);
 
-  <!-- Action buttons (right column above aim) -->
-  <div class="hud-right">
-    <button class="hud-btn run-btn"  id="btnRun">RUN</button>
-    <button class="hud-btn jump-btn" id="btnJump">JUMP</button>
-    <button class="hud-btn swim-btn" id="btnSwim" style="display:none">SWIM</button>
-    <button class="hud-btn surf-btn" id="btnSurf" style="display:none">SURF</button>
-  </div>
-</div>
+  const btn = (id, key) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('touchstart', e => { e.preventDefault(); game.buttons[key] = true; }, { passive: false });
+    el.addEventListener('touchend',   e => { e.preventDefault(); game.buttons[key] = false; }, { passive: false });
+    el.addEventListener('mousedown',  () => game.buttons[key] = true);
+    el.addEventListener('mouseup',    () => game.buttons[key] = false);
+  };
+  btn('btnRun', 'run');
+  btn('btnJump', 'jump');
+  btn('btnSwim', 'swim');
+  btn('btnSurf', 'surf');
 
-<script src="orientation.js"></script>
-<script src="intro.js"></script>
-<script src="lobby.js"></script>
-<script src="map.js"></script>
-<script src="game.js"></script>
-</body>
-</html>
+  const zIn = document.getElementById('zoomIn');
+  const zOut = document.getElementById('zoomOut');
+  if (zIn)  zIn.addEventListener('click',  () => game.camera.targetZoom = Math.min(1.2, game.camera.targetZoom + 0.15));
+  if (zOut) zOut.addEventListener('click', () => game.camera.targetZoom = Math.max(0.15, game.camera.targetZoom - 0.15));
+}
+
+function update(dt) {
+  const p = game.player;
+  if (!p) return;
+
+  game.camera.zoom += (game.camera.targetZoom - game.camera.zoom) * Math.min(1, dt * 6);
+
+  let ix = 0, iy = 0;
+  if (game.keys['a'] || game.keys['arrowleft'])  ix -= 1;
+  if (game.keys['d'] || game.keys['arrowright']) ix += 1;
+  if (game.keys['w'] || game.keys['arrowup'])    iy -= 1;
+  if (game.keys['s'] || game.keys['arrowdown'])  iy += 1;
+  if (game.move.dx || game.move.dy) { ix = game.move.dx; iy = game.move.dy; }
+  const mag = Math.hypot(ix, iy);
+  if (mag > 1) { ix /= mag; iy /= mag; }
+
+  // Jump
+  if (game.buttons.jump && p.z === 0 && p.vz === 0) { p.vz = 420; }
+  game.buttons.jump = false;
+
+  if (p.vz !== 0 || p.z > 0) {
+    p.z += p.vz * dt;
+    p.vz -= 1400 * dt;
+    if (p.z <= 0) { p.z = 0; p.vz = 0; }
+  }
+
+  const zone = window.MAP.getZoneAt(p.x, p.y);
+  p.inWater = !!(zone && zone.water);
+
+  if (p.inWater) {
+    if (game.buttons.surf) p.state = 'surf', p.speed = SPEED.surf;
+    else if (game.buttons.swim) p.state = 'swim', p.speed = SPEED.swim;
+    else p.state = 'wade', p.speed = SPEED.wade;
+  } else if (game.buttons.run) {
+    p.state = 'run'; p.speed = SPEED.run;
+  } else {
+    p.state = 'walk'; p.speed = SPEED.walk;
+  }
+  if (p.z > 0) p.state = 'jump';
+
+  p.vx = ix * p.speed;
+  p.vy = iy * p.speed;
+  p.x += p.vx * dt;
+  p.y += p.vy * dt;
+  p.x = Math.max(20, Math.min(window.MAP.WORLD_W - 20, p.x));
+  p.y = Math.max(20, Math.min(window.MAP.WORLD_H - 20, p.y));
+  if (mag > 0.1) p.angle = Math.atan2(iy, ix);
+
+  const z = game.camera.zoom;
+  const vw = canvas.width / z, vh = canvas.height / z;
+  game.camera.w = vw; game.camera.h = vh;
+  game.camera.x = Math.max(0, Math.min(window.MAP.WORLD_W - vw, p.x - vw / 2));
+  game.camera.y = Math.max(0, Math.min(window.MAP.WORLD_H - vh, p.y - vh / 2));
+
+  const zn = document.getElementById('zoneName');
+  if (zn) zn.textContent = zone ? zone.name : '';
+  const st = document.getElementById('stateLabel');
+  if (st) st.textContent = p.state.toUpperCase();
+
+  const swimBtn = document.getElementById('btnSwim');
+  const surfBtn = document.getElementById('btnSurf');
+  if (swimBtn) swimBtn.style.display = p.inWater ? 'flex' : 'none';
+  if (surfBtn) surfBtn.style.display = p.inWater ? 'flex' : 'none';
+}
+
+function render() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const cam = game.camera;
+  const z = cam.zoom;
+
+  window.MAP.drawWorld(ctx, cam, z);
+
+  const p = game.player;
+  if (p) {
+    const sx = (p.x - cam.x) * z;
+    const sy = (p.y - cam.y) * z - p.z * z;
+    const r  = p.radius * z;
+
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse((p.x - cam.x) * z, (p.y - cam.y) * z + r * 0.6, r * 0.9, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(p.angle + Math.PI / 2);
+    ctx.fillStyle = p.inWater ? '#3d6ea8' : p.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = Math.max(1.5, 2 * z);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.6, 4 * z, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.font = `bold ${Math.max(10, 14 * z)}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = '#fff';
+    const nameY = sy - r - 12 * z;
+    ctx.strokeText(p.name, sx, nameY);
+    ctx.fillText(p.name, sx, nameY);
+    ctx.restore();
+  }
+}
+
+function loop(ts) {
+  if (!game.running) return;
+  const dt = Math.min((ts - game.lastTime) / 1000, 0.05);
+  game.lastTime = ts;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+async function startGame(config) {
+  document.getElementById('gameScreen').classList.remove('hidden');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  showLoading(0);
+  await window.MAP.preloadMapAssets(p => showLoading(p));
+  hideLoading();
+
+  const spawn = window.MAP.getSpawnPoint();
+  game.player = createPlayer(config, spawn);
+  game.camera.w = canvas.width / game.camera.zoom;
+  game.camera.h = canvas.height / game.camera.zoom;
+  game.camera.x = game.player.x - game.camera.w / 2;
+  game.camera.y = game.player.y - game.camera.h / 2;
+
+  setupControls();
+
+  game.running = true;
+  game.lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function showLoading(progress) {
+  let el = document.getElementById('loadingOverlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loadingOverlay';
+    el.className = 'loading-overlay';
+    el.innerHTML = `<div class="loading-inner"><div class="loading-title">KARNAL ROYALE</div><div class="loading-bar-bg"><div id="loadingBarFill" class="loading-bar-fill"></div></div><div id="loadingPct" class="loading-pct">0%</div><div class="loading-hint">LOADING KARNAL...</div></div>`;
+    document.body.appendChild(el);
+  }
+  el.classList.remove('hidden');
+  const pct = Math.round(progress * 100);
+  document.getElementById('loadingBarFill').style.width = pct + '%';
+  document.getElementById('loadingPct').textContent = pct + '%';
+}
+function hideLoading() {
+  const el = document.getElementById('loadingOverlay');
+  if (el) el.classList.add('hidden');
+}
+
+window.startGame = startGame;

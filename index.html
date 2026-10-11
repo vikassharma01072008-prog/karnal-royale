@@ -10,7 +10,6 @@
 </head>
 <body>
 
-<!-- ROTATE OVERLAY (portrait warning) -->
 <div id="rotateOverlay" class="rotate-overlay hidden">
   <div class="rotate-inner">
     <div class="rotate-phone">📱</div>
@@ -19,28 +18,20 @@
   </div>
 </div>
 
-<!-- INTRO SEQUENCE -->
+<!-- INTRO -->
 <div id="introOverlay" class="intro-overlay">
   <canvas id="particleCanvas"></canvas>
-
   <div id="phase1" class="intro-phase">
-    <h1 class="intro-title">
-      <span class="karnal">KARNAL</span>
-      <span class="royale">ROYALE</span>
-    </h1>
+    <h1 class="intro-title"><span class="karnal">KARNAL</span><span class="royale">ROYALE</span></h1>
     <div class="intro-sub">SEASON 01</div>
   </div>
-
   <div id="phase2" class="intro-phase hidden">
     <img id="planeImg" src="assets/plane.png" alt="plane" class="plane-img">
-    <div class="plane-trail"></div>
   </div>
-
   <div id="phase3" class="intro-phase hidden">
     <div class="powered-by">POWERED BY</div>
     <div class="vaan">VAAN CONSULTANCY</div>
   </div>
-
   <button id="skipIntro" class="skip-btn">SKIP ▶</button>
 </div>
 
@@ -48,81 +39,62 @@
 <div id="lobbyOverlay" class="lobby-overlay hidden">
   <img src="assets/loby.png" alt="lobby" class="lobby-bg">
   <div class="lobby-dark"></div>
-
   <div class="lobby-top">
     <div class="player-card">
       <div class="player-avatar"></div>
       <input id="playerName" class="player-name-input" type="text" maxlength="14" placeholder="YOUR NAME" value="PLAYER">
     </div>
-    <div class="lobby-logo">
-      <span class="karnal">KARNAL</span>
-      <span class="royale">ROYALE</span>
-    </div>
+    <div class="lobby-logo"><span class="karnal">KARNAL</span><span class="royale">ROYALE</span></div>
     <button id="lobbySettings" class="icon-btn">⚙</button>
   </div>
-
   <div class="lobby-center">
     <div class="char-panel">
       <div class="char-label">SELECT CHARACTER</div>
       <div id="charStrip" class="char-strip"></div>
       <div id="charName" class="char-name">MAN BLUE</div>
     </div>
-
     <div class="mode-panel">
       <div class="mode-label">SELECT MODE</div>
-      <button class="mode-btn" data-mode="bots">
-        <span class="mode-icon">🤖</span>
-        <span class="mode-name">PLAY WITH BOTS</span>
-        <span class="mode-sub">19 bots · full map</span>
-      </button>
-      <button class="mode-btn" data-mode="friends">
-        <span class="mode-icon">👥</span>
-        <span class="mode-name">PLAY WITH FRIENDS</span>
-        <span class="mode-sub">room code · private</span>
-      </button>
-      <button class="mode-btn" data-mode="hybrid">
-        <span class="mode-icon">⚔</span>
-        <span class="mode-name">HYBRID</span>
-        <span class="mode-sub">friends + bots fill</span>
-      </button>
-      <button class="mode-btn" data-mode="quick">
-        <span class="mode-icon">⚡</span>
-        <span class="mode-name">QUICK MATCH</span>
-        <span class="mode-sub">2-min queue · auto-fill</span>
-      </button>
-      <button class="mode-btn" data-mode="team">
-        <span class="mode-icon">🛡</span>
-        <span class="mode-name">TEAM MODE</span>
-        <span class="mode-sub">next: 1v1</span>
-      </button>
+      <button class="mode-btn" data-mode="bots"><span class="mode-icon">🤖</span><span class="mode-name">PLAY WITH BOTS</span><span class="mode-sub">19 bots · full map</span></button>
+      <button class="mode-btn" data-mode="friends"><span class="mode-icon">👥</span><span class="mode-name">PLAY WITH FRIENDS</span><span class="mode-sub">room code · private</span></button>
+      <button class="mode-btn" data-mode="hybrid"><span class="mode-icon">⚔</span><span class="mode-name">HYBRID</span><span class="mode-sub">friends + bots fill</span></button>
+      <button class="mode-btn" data-mode="quick"><span class="mode-icon">⚡</span><span class="mode-name">QUICK MATCH</span><span class="mode-sub">2-min queue</span></button>
+      <button class="mode-btn" data-mode="team"><span class="mode-icon">🛡</span><span class="mode-name">TEAM MODE</span><span class="mode-sub">next: 1v1</span></button>
     </div>
   </div>
-
   <div class="lobby-footer">
     <div class="powered-tag">POWERED BY VAAN CONSULTANCY</div>
     <button id="startBtn" class="start-btn">▶  DEPLOY</button>
   </div>
 </div>
 
-<!-- GAME CANVAS -->
+<!-- GAME -->
 <div id="gameScreen" class="game-screen hidden">
   <canvas id="gameCanvas"></canvas>
 
-  <!-- HUD: top -->
   <div class="hud-top">
     <div id="zoneName" class="hud-zone"></div>
     <div id="stateLabel" class="hud-state">WALK</div>
   </div>
 
-  <!-- HUD: joystick (left) -->
+  <div class="zoom-wrap">
+    <button id="zoomIn"  class="zoom-btn">＋</button>
+    <button id="zoomOut" class="zoom-btn">−</button>
+  </div>
+
   <div id="joyBase" class="joy-base">
     <div id="joyStick" class="joy-stick"></div>
   </div>
 
-  <!-- HUD: right side buttons -->
+  <div id="aimBase" class="joy-base aim-base">
+    <div id="aimStick" class="joy-stick aim-stick"></div>
+  </div>
+
   <div class="hud-right">
-    <button class="hud-btn" id="btnRun">RUN</button>
-    <button class="hud-btn" id="btnJump">JUMP</button>
+    <button class="hud-btn run-btn"  id="btnRun">RUN</button>
+    <button class="hud-btn jump-btn" id="btnJump">JUMP</button>
+    <button class="hud-btn swim-btn" id="btnSwim" style="display:none">SWIM</button>
+    <button class="hud-btn surf-btn" id="btnSurf" style="display:none">SURF</button>
   </div>
 </div>
 
