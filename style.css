@@ -3,7 +3,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font
 canvas { display: block; }
 .hidden { display: none !important; }
 
-/* ===== ROTATE OVERLAY ===== */
+/* ROTATE */
 .rotate-overlay { position: fixed; inset: 0; background: #0a0a0f; z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .rotate-inner { text-align: center; padding: 20px; }
 .rotate-phone { font-size: 80px; animation: rotatePhone 2s ease-in-out infinite; }
@@ -11,47 +11,38 @@ canvas { display: block; }
 .rotate-overlay p { font-size: 13px; color: #888; margin-top: 8px; letter-spacing: 1px; }
 @keyframes rotatePhone { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(-90deg); } }
 
-/* ===== INTRO OVERLAY ===== */
+/* INTRO */
 .intro-overlay { position: fixed; inset: 0; background: radial-gradient(circle at center, #1a0a0a 0%, #000 80%); z-index: 5000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 #particleCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .intro-phase { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-
 .intro-title { font-size: 72px; letter-spacing: 8px; text-align: center; line-height: 0.9; opacity: 0; animation: titleIn 1.4s ease-out forwards; }
 .intro-title .karnal { display: block; color: #fff; text-shadow: 0 0 30px #ff8a3d, 0 0 60px #ff4500; }
 .intro-title .royale { display: block; color: #ff8a3d; text-shadow: 0 0 30px #ff4500, 0 0 80px #ff4500; }
 .intro-sub { margin-top: 20px; font-size: 14px; letter-spacing: 8px; color: #ff8a3d; opacity: 0; animation: subIn 1s ease-out 0.8s forwards; }
 @keyframes titleIn { from { opacity: 0; transform: scale(0.6); filter: blur(20px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
 @keyframes subIn { from { opacity: 0; letter-spacing: 20px; } to { opacity: 0.8; letter-spacing: 8px; } }
-
 .plane-img { width: 220px; height: auto; filter: drop-shadow(0 0 20px #ff8a3d) drop-shadow(0 0 40px #ff4500); animation: planeFly 2.8s ease-in-out forwards; }
 @keyframes planeFly { 0% { transform: translateX(-120vw) rotate(-6deg); } 100% { transform: translateX(120vw) rotate(-6deg); } }
-
 .powered-by { font-size: 12px; letter-spacing: 6px; color: #888; opacity: 0; animation: fadeUp 0.8s ease-out 0.3s forwards; }
 .vaan { font-size: 28px; letter-spacing: 6px; color: #fff; margin-top: 8px; text-shadow: 0 0 20px #ff8a3d; opacity: 0; animation: fadeUp 0.8s ease-out 0.6s forwards; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
 .skip-btn { position: absolute; top: 20px; right: 20px; padding: 10px 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: #fff; font-size: 13px; letter-spacing: 3px; border-radius: 6px; cursor: pointer; z-index: 10; backdrop-filter: blur(6px); }
 .skip-btn:active { background: rgba(255,138,61,0.4); }
 
-/* ===== LOBBY ===== */
+/* LOBBY */
 .lobby-overlay { position: fixed; inset: 0; z-index: 4000; overflow: hidden; }
 .lobby-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .lobby-dark { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0.85) 100%); }
-
 .lobby-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; z-index: 2; }
 .player-card { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.5); padding: 6px 12px 6px 6px; border-radius: 30px; border: 1px solid rgba(255,138,61,0.3); }
 .player-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #ff8a3d, #ff4500); border: 2px solid #fff; }
 .player-name-input { background: transparent; border: none; color: #fff; font-size: 14px; letter-spacing: 2px; width: 120px; outline: none; font-family: inherit; }
 .player-name-input::placeholder { color: #888; }
-
 .lobby-logo { font-size: 26px; letter-spacing: 4px; }
 .lobby-logo .karnal { color: #fff; text-shadow: 0 0 15px #ff8a3d; }
 .lobby-logo .royale { color: #ff8a3d; text-shadow: 0 0 15px #ff4500; }
-
 .icon-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 18px; cursor: pointer; }
-
 .lobby-center { position: absolute; top: 70px; bottom: 80px; left: 0; right: 0; display: flex; z-index: 2; padding: 0 20px; gap: 20px; }
-
 .char-panel { flex: 0 0 45%; display: flex; flex-direction: column; }
 .char-label, .mode-label { font-size: 11px; letter-spacing: 4px; color: #ff8a3d; margin-bottom: 8px; opacity: 0.9; }
 .char-strip { display: flex; gap: 8px; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
@@ -60,28 +51,19 @@ canvas { display: block; }
 .char-item.selected { border-color: #ff8a3d; box-shadow: 0 0 20px #ff8a3d; transform: scale(1.1); }
 .char-item img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .char-name { margin-top: auto; font-size: 18px; letter-spacing: 4px; color: #fff; padding: 12px 0; border-top: 1px solid rgba(255,138,61,0.3); }
-
 .mode-panel { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .mode-btn { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(10,10,20,0.75); border: 1px solid rgba(255,138,61,0.25); border-left: 3px solid #ff8a3d; border-radius: 8px; color: #fff; font-family: inherit; text-align: left; cursor: pointer; transition: all 0.15s; }
 .mode-btn:active, .mode-btn:hover { background: rgba(255,138,61,0.15); transform: translateX(4px); }
 .mode-icon { font-size: 20px; }
 .mode-name { font-size: 13px; letter-spacing: 2px; font-weight: bold; }
 .mode-sub { font-size: 10px; letter-spacing: 1px; color: #888; margin-top: 2px; display: block; }
-
 .lobby-footer { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; z-index: 2; background: linear-gradient(0deg, rgba(0,0,0,0.9), transparent); }
 .powered-tag { font-size: 10px; letter-spacing: 3px; color: #888; }
 .start-btn { padding: 12px 40px; background: linear-gradient(135deg, #ff8a3d, #ff4500); border: none; color: #fff; font-family: inherit; font-size: 16px; letter-spacing: 4px; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 0 30px rgba(255,138,61,0.5); }
 .start-btn:active { transform: scale(0.96); box-shadow: 0 0 15px rgba(255,138,61,0.8); }
 
-.game-screen { position: fixed; inset: 0; z-index: 3000; background: #0a0a0f; }
-.game-screen canvas { width: 100%; height: 100%; }
-
-/* ===== LOADING OVERLAY ===== */
-.loading-overlay {
-  position: fixed; inset: 0; z-index: 6000;
-  background: radial-gradient(circle at center, #1a0a0a 0%, #000 80%);
-  display: flex; align-items: center; justify-content: center;
-}
+/* LOADING */
+.loading-overlay { position: fixed; inset: 0; z-index: 6000; background: radial-gradient(circle at center, #1a0a0a 0%, #000 80%); display: flex; align-items: center; justify-content: center; }
 .loading-inner { text-align: center; width: 70%; max-width: 500px; }
 .loading-title { font-size: 34px; letter-spacing: 6px; color: #ff8a3d; text-shadow: 0 0 20px #ff4500; margin-bottom: 24px; }
 .loading-bar-bg { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
@@ -89,64 +71,38 @@ canvas { display: block; }
 .loading-pct { margin-top: 10px; font-size: 13px; letter-spacing: 3px; color: #fff; }
 .loading-hint { margin-top: 20px; font-size: 10px; letter-spacing: 4px; color: #666; }
 
-/* ===== GAME HUD ===== */
-.hud-top {
-  position: absolute; top: 10px; left: 0; right: 0;
-  display: flex; justify-content: center; gap: 12px; z-index: 5; pointer-events: none;
-}
-.hud-zone {
-  padding: 6px 18px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,138,61,0.4);
-  border-radius: 20px; font-size: 13px; letter-spacing: 3px; color: #ff8a3d;
-}
-.hud-state {
-  padding: 6px 14px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 20px; font-size: 12px; letter-spacing: 3px; color: #fff;
-}
+/* GAME HUD */
+.game-screen { position: fixed; inset: 0; z-index: 3000; background: #0a0a0f; }
+.game-screen canvas { width: 100%; height: 100%; }
 
-/* ===== JOYSTICK (left) ===== */
-.joy-base {
-  position: absolute; bottom: 90px; left: 40px;
-  width: 130px; height: 130px; border-radius: 50%;
-  background: rgba(255,255,255,0.08);
-  border: 2px solid rgba(255,255,255,0.2);
-  z-index: 10; touch-action: none; user-select: none;
-}
-.joy-stick {
-  position: absolute; top: 50%; left: 50%;
-  width: 58px; height: 58px; border-radius: 50%;
-  background: rgba(255,138,61,0.55);
-  border: 2px solid #fff;
-  transform: translate(-50%, -50%);
-  margin-left: -29px; margin-top: -29px;
-  pointer-events: none;
-  transition: transform 0.05s;
-}
+.hud-top { position: absolute; top: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 12px; z-index: 5; pointer-events: none; }
+.hud-zone { padding: 6px 18px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,138,61,0.5); border-radius: 20px; font-size: 13px; letter-spacing: 3px; color: #ff8a3d; }
+.hud-state { padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; font-size: 12px; letter-spacing: 3px; color: #fff; }
 
-/* ===== RIGHT-SIDE HUD BUTTONS ===== */
-.hud-right {
-  position: absolute; bottom: 90px; right: 40px;
-  display: flex; flex-direction: column; gap: 14px; z-index: 10;
-}
-.hud-btn {
-  width: 82px; height: 82px; border-radius: 50%;
-  background: rgba(0,0,0,0.5);
-  border: 2px solid rgba(255,255,255,0.25);
-  color: #fff; font-family: inherit; font-size: 12px; letter-spacing: 2px;
-  font-weight: bold; cursor: pointer;
-}
+.zoom-wrap { position: absolute; top: 60px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
+.zoom-btn { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); color: #fff; font-size: 22px; cursor: pointer; }
+.zoom-btn:active { background: rgba(255,138,61,0.5); }
+
+.joy-base { position: absolute; bottom: 30px; left: 40px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.22); z-index: 15; touch-action: none; }
+.joy-stick { position: absolute; top: 50%; left: 50%; width: 62px; height: 62px; border-radius: 50%; background: rgba(255,138,61,0.6); border: 2px solid #fff; transform: translate(-50%, -50%); pointer-events: none; }
+.aim-base { left: auto; right: 40px; background: rgba(255,100,100,0.08); border-color: rgba(255,100,100,0.3); }
+.aim-stick { background: rgba(255,100,100,0.55); }
+
+.hud-right { position: absolute; bottom: 185px; right: 40px; display: flex; flex-direction: column; gap: 10px; z-index: 15; }
+.hud-btn { width: 74px; height: 74px; border-radius: 50%; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.3); color: #fff; font-family: inherit; font-size: 11px; letter-spacing: 2px; font-weight: bold; cursor: pointer; }
 .hud-btn:active { background: rgba(255,138,61,0.5); border-color: #ff8a3d; }
-#btnRun { background: rgba(255,138,61,0.15); }
-#btnJump { background: rgba(100,200,255,0.15); }
+.run-btn  { background: rgba(255,138,61,0.2); }
+.jump-btn { background: rgba(100,200,255,0.2); }
+.swim-btn { background: rgba(80,160,255,0.25); }
+.surf-btn { background: rgba(80,255,180,0.25); }
 
-/* Landscape small screens */
 @media (orientation: landscape) and (max-height: 500px) {
   .intro-title { font-size: 52px; }
-  .lobby-logo { font-size: 20px; }
-  .char-item { flex: 0 0 54px; height: 54px; }
-  .mode-btn { padding: 8px 12px; }
-  .mode-name { font-size: 12px; }
-  .start-btn { padding: 10px 30px; font-size: 14px; }
-  .joy-base { width: 110px; height: 110px; bottom: 70px; left: 30px; }
-  .joy-stick { width: 48px; height: 48px; margin-left: -24px; margin-top: -24px; }
-  .hud-btn { width: 70px; height: 70px; font-size: 11px; }
+  .joy-base { width: 118px; height: 118px; bottom: 20px; left: 30px; }
+  .joy-stick { width: 52px; height: 52px; }
+  .aim-base { left: auto; right: 30px; }
+  .hud-btn { width: 62px; height: 62px; font-size: 10px; }
+  .hud-right { bottom: 155px; right: 30px; }
+  .zoom-wrap { top: 50px; right: 10px; }
+  .zoom-btn { width: 38px; height: 38px; font-size: 18px; }
 }

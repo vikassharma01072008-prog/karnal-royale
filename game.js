@@ -1,304 +1,111 @@
-// ============================================
-// GAME.JS — M2A: Map + Player + Camera + Movement
-// ============================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Karnal Royale</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+<div id="rotateOverlay" class="rotate-overlay hidden">
+  <div class="rotate-inner">
+    <div class="rotate-phone">📱</div>
+    <h2>ROTATE YOUR PHONE</h2>
+    <p>Karnal Royale plays in landscape</p>
+  </div>
+</div>
 
-// ---------- RESIZE ----------
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resizeCanvas);
-window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
-resizeCanvas();
+<!-- INTRO -->
+<div id="introOverlay" class="intro-overlay">
+  <canvas id="particleCanvas"></canvas>
+  <div id="phase1" class="intro-phase">
+    <h1 class="intro-title"><span class="karnal">KARNAL</span><span class="royale">ROYALE</span></h1>
+    <div class="intro-sub">SEASON 01</div>
+  </div>
+  <div id="phase2" class="intro-phase hidden">
+    <img id="planeImg" src="assets/plane.png" alt="plane" class="plane-img">
+  </div>
+  <div id="phase3" class="intro-phase hidden">
+    <div class="powered-by">POWERED BY</div>
+    <div class="vaan">VAAN CONSULTANCY</div>
+  </div>
+  <button id="skipIntro" class="skip-btn">SKIP ▶</button>
+</div>
 
-// ---------- GAME STATE ----------
-const game = {
-  running: false,
-  player: null,
-  camera: { x: 0, y: 0, w: 0, h: 0 },
-  world: null,
-  keys: {},
-  joystick: { active: false, dx: 0, dy: 0, id: null, baseX: 0, baseY: 0 },
-  lastTime: 0,
-  dpr: window.devicePixelRatio || 1
-};
+<!-- LOBBY -->
+<div id="lobbyOverlay" class="lobby-overlay hidden">
+  <img src="assets/loby.png" alt="lobby" class="lobby-bg">
+  <div class="lobby-dark"></div>
+  <div class="lobby-top">
+    <div class="player-card">
+      <div class="player-avatar"></div>
+      <input id="playerName" class="player-name-input" type="text" maxlength="14" placeholder="YOUR NAME" value="PLAYER">
+    </div>
+    <div class="lobby-logo"><span class="karnal">KARNAL</span><span class="royale">ROYALE</span></div>
+    <button id="lobbySettings" class="icon-btn">⚙</button>
+  </div>
+  <div class="lobby-center">
+    <div class="char-panel">
+      <div class="char-label">SELECT CHARACTER</div>
+      <div id="charStrip" class="char-strip"></div>
+      <div id="charName" class="char-name">MAN BLUE</div>
+    </div>
+    <div class="mode-panel">
+      <div class="mode-label">SELECT MODE</div>
+      <button class="mode-btn" data-mode="bots"><span class="mode-icon">🤖</span><span class="mode-name">PLAY WITH BOTS</span><span class="mode-sub">19 bots · full map</span></button>
+      <button class="mode-btn" data-mode="friends"><span class="mode-icon">👥</span><span class="mode-name">PLAY WITH FRIENDS</span><span class="mode-sub">room code · private</span></button>
+      <button class="mode-btn" data-mode="hybrid"><span class="mode-icon">⚔</span><span class="mode-name">HYBRID</span><span class="mode-sub">friends + bots fill</span></button>
+      <button class="mode-btn" data-mode="quick"><span class="mode-icon">⚡</span><span class="mode-name">QUICK MATCH</span><span class="mode-sub">2-min queue</span></button>
+      <button class="mode-btn" data-mode="team"><span class="mode-icon">🛡</span><span class="mode-name">TEAM MODE</span><span class="mode-sub">next: 1v1</span></button>
+    </div>
+  </div>
+  <div class="lobby-footer">
+    <div class="powered-tag">POWERED BY VAAN CONSULTANCY</div>
+    <button id="startBtn" class="start-btn">▶  DEPLOY</button>
+  </div>
+</div>
 
-// ---------- SPEED TABLE ----------
-const SPEED = {
-  walk: 320,       // px/sec, "100%"
-  run: 480,        // 150%
-  wade: 128,       // 40% in water
-  swim: 256,       // 80%
-  surf: 320        // 100%
-};
+<!-- GAME -->
+<div id="gameScreen" class="game-screen hidden">
+  <canvas id="gameCanvas"></canvas>
 
-// ---------- PLAYER ----------
-function createPlayer(config, spawn) {
-  return {
-    x: spawn.x,
-    y: spawn.y,
-    radius: 22,
-    speed: SPEED.walk,
-    vx: 0,
-    vy: 0,
-    angle: 0,
-    // state
-    state: 'walk',  // walk | run | wade | swim | surf
-    inWater: false,
-    // rendering
-    name: config.playerName || 'PLAYER',
-    sprite: null,   // set by sprite loader (M2B)
-    spriteFolder: config.character ? config.character.folder : 'manblue',
-    color: '#ff8a3d' // fallback render color
-  };
-}
+  <div class="hud-top">
+    <div id="zoneName" class="hud-zone"></div>
+    <div id="stateLabel" class="hud-state">WALK</div>
+  </div>
 
-// ---------- INPUT ----------
-window.addEventListener('keydown', (e) => { game.keys[e.key.toLowerCase()] = true; });
-window.addEventListener('keyup', (e) => { game.keys[e.key.toLowerCase()] = false; });
+  <!-- Zoom buttons (top right) -->
+  <div class="zoom-wrap">
+    <button id="zoomIn"  class="zoom-btn">＋</button>
+    <button id="zoomOut" class="zoom-btn">−</button>
+  </div>
 
-// ---------- MOBILE JOYSTICK (left side only for M2A) ----------
-// The joystick UI is defined in index.html; we just read its state.
-function setupJoystick() {
-  const base = document.getElementById('joyBase');
-  const stick = document.getElementById('joyStick');
-  if (!base || !stick) return;
+  <!-- Move joystick (left) -->
+  <div id="joyBase" class="joy-base">
+    <div id="joyStick" class="joy-stick"></div>
+  </div>
 
-  const baseRect = () => base.getBoundingClientRect();
+  <!-- Aim joystick (right) -->
+  <div id="aimBase" class="joy-base aim-base">
+    <div id="aimStick" class="joy-stick aim-stick"></div>
+  </div>
 
-  const start = (e) => {
-    const t = e.touches ? e.touches[0] : e;
-    const r = baseRect();
-    game.joystick.active = true;
-    game.joystick.id = t.identifier ?? 'mouse';
-    game.joystick.baseX = r.left + r.width / 2;
-    game.joystick.baseY = r.top + r.height / 2;
-    move(t);
-  };
-  const move = (e) => {
-    if (!game.joystick.active) return;
-    let t = e.touches ? Array.from(e.touches).find(t => t.identifier === game.joystick.id) : e;
-    if (!t) return;
-    const dx = t.clientX - game.joystick.baseX;
-    const dy = t.clientY - game.joystick.baseY;
-    const max = 55;
-    const dist = Math.min(Math.hypot(dx, dy), max);
-    const ang = Math.atan2(dy, dx);
-    const sx = Math.cos(ang) * dist;
-    const sy = Math.sin(ang) * dist;
-    stick.style.transform = `translate(${sx}px, ${sy}px)`;
-    game.joystick.dx = sx / max;
-    game.joystick.dy = sy / max;
-  };
-  const end = () => {
-    game.joystick.active = false;
-    game.joystick.dx = 0;
-    game.joystick.dy = 0;
-    stick.style.transform = 'translate(0,0)';
-  };
+  <!-- Action buttons (right column above aim) -->
+  <div class="hud-right">
+    <button class="hud-btn run-btn"  id="btnRun">RUN</button>
+    <button class="hud-btn jump-btn" id="btnJump">JUMP</button>
+    <button class="hud-btn swim-btn" id="btnSwim" style="display:none">SWIM</button>
+    <button class="hud-btn surf-btn" id="btnSurf" style="display:none">SURF</button>
+  </div>
+</div>
 
-  base.addEventListener('touchstart', (e) => { e.preventDefault(); start(e); }, { passive: false });
-  base.addEventListener('touchmove', (e) => { e.preventDefault(); move(e); }, { passive: false });
-  base.addEventListener('touchend', end);
-  base.addEventListener('touchcancel', end);
-  base.addEventListener('mousedown', start);
-  window.addEventListener('mousemove', move);
-  window.addEventListener('mouseup', end);
-}
-
-// ---------- UPDATE ----------
-function update(dt) {
-  const p = game.player;
-  if (!p) return;
-
-  // Input vector
-  let ix = 0, iy = 0;
-  if (game.keys['a'] || game.keys['arrowleft']) ix -= 1;
-  if (game.keys['d'] || game.keys['arrowright']) ix += 1;
-  if (game.keys['w'] || game.keys['arrowup']) iy -= 1;
-  if (game.keys['s'] || game.keys['arrowdown']) iy += 1;
-  if (game.joystick.dx || game.joystick.dy) {
-    ix = game.joystick.dx;
-    iy = game.joystick.dy;
-  }
-
-  const mag = Math.hypot(ix, iy);
-  if (mag > 1) { ix /= mag; iy /= mag; }
-
-  // Movement
-  p.vx = ix * p.speed;
-  p.vy = iy * p.speed;
-  p.x += p.vx * dt;
-  p.y += p.vy * dt;
-
-  // Clamp to world
-  p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x));
-  p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
-
-  // Face direction
-  if (mag > 0.1) p.angle = Math.atan2(iy, ix);
-
-  // Zone detection (surface type)
-  const zone = window.MAP.getZoneAt(p.x, p.y);
-  p.inWater = !!(zone && zone.water);
-
-  // Speed by state (M2A: water = wade only; swim/surf in M2B)
-  if (p.inWater) {
-    p.state = 'wade';
-    p.speed = SPEED.wade;
-  } else {
-    p.state = 'walk';
-    p.speed = SPEED.walk;
-  }
-
-  // Camera follow (centered on player)
-  game.camera.x = p.x - game.camera.w / 2;
-  game.camera.y = p.y - game.camera.h / 2;
-  // Clamp camera to world edges
-  game.camera.x = Math.max(0, Math.min(window.MAP.WORLD_W - game.camera.w, game.camera.x));
-  game.camera.y = Math.max(0, Math.min(window.MAP.WORLD_H - game.camera.h, game.camera.y));
-
-  // HUD updates
-  updateHUD(zone);
-}
-
-function updateHUD(zone) {
-  const el = document.getElementById('zoneName');
-  if (el) el.textContent = zone ? zone.name : '';
-  const st = document.getElementById('stateLabel');
-  if (st) st.textContent = game.player.state.toUpperCase();
-}
-
-// ---------- RENDER ----------
-function render() {
-  ctx.fillStyle = '#0a0a0f';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const cam = game.camera;
-  cam.w = canvas.width;
-  cam.h = canvas.height;
-
-  // Draw world
-  window.MAP.drawWorld(ctx, cam);
-
-  // Draw player
-  const p = game.player;
-  if (p) {
-    const sx = p.x - cam.x;
-    const sy = p.y - cam.y;
-
-    // Shadow
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.ellipse(sx, sy + p.radius * 0.7, p.radius * 0.9, p.radius * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Body (fallback circle until M2B sprite loader)
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(p.angle + Math.PI / 2);
-    ctx.fillStyle = p.inWater ? '#3d6ea8' : p.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Facing indicator
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(0, -p.radius * 0.6, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Name tag
-    ctx.save();
-    ctx.font = 'bold 13px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
-    ctx.strokeText(p.name, sx, sy - p.radius - 12);
-    ctx.fillText(p.name, sx, sy - p.radius - 12);
-    ctx.restore();
-  }
-
-  // FPS-ish debug (top-left, tiny)
-  ctx.save();
-  ctx.globalAlpha = 0.4;
-  ctx.fillStyle = '#fff';
-  ctx.font = '11px monospace';
-  ctx.fillText(`X:${Math.round(game.player.x)} Y:${Math.round(game.player.y)}`, 10, 18);
-  ctx.restore();
-}
-
-// ---------- MAIN LOOP ----------
-function loop(ts) {
-  if (!game.running) return;
-  const dt = Math.min((ts - game.lastTime) / 1000, 0.05);
-  game.lastTime = ts;
-  update(dt);
-  render();
-  requestAnimationFrame(loop);
-}
-
-// ---------- START GAME (called by lobby.js) ----------
-async function startGame(config) {
-  document.getElementById('gameScreen').classList.remove('hidden');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  // Loading overlay
-  showLoading(0);
-
-  await window.MAP.preloadMapAssets((p) => showLoading(p));
-
-  hideLoading();
-
-  const spawn = window.MAP.getSpawnPoint();
-  game.player = createPlayer(config, spawn);
-  game.camera.w = canvas.width;
-  game.camera.h = canvas.height;
-  game.camera.x = game.player.x - canvas.width / 2;
-  game.camera.y = game.player.y - canvas.height / 2;
-
-  setupJoystick();
-
-  game.running = true;
-  game.lastTime = performance.now();
-  requestAnimationFrame(loop);
-}
-
-// ---------- LOADING OVERLAY ----------
-function showLoading(progress) {
-  let el = document.getElementById('loadingOverlay');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'loadingOverlay';
-    el.className = 'loading-overlay';
-    el.innerHTML = `
-      <div class="loading-inner">
-        <div class="loading-title">KARNAL ROYALE</div>
-        <div class="loading-bar-bg"><div id="loadingBarFill" class="loading-bar-fill"></div></div>
-        <div id="loadingPct" class="loading-pct">0%</div>
-        <div class="loading-hint">LOADING KARNAL...</div>
-      </div>`;
-    document.body.appendChild(el);
-  }
-  el.classList.remove('hidden');
-  const pct = Math.round(progress * 100);
-  document.getElementById('loadingBarFill').style.width = pct + '%';
-  document.getElementById('loadingPct').textContent = pct + '%';
-}
-function hideLoading() {
-  const el = document.getElementById('loadingOverlay');
-  if (el) el.classList.add('hidden');
-}
-
-window.startGame = startGame;
+<script src="orientation.js"></script>
+<script src="intro.js"></script>
+<script src="lobby.js"></script>
+<script src="map.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
