@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#111111">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Karnal Royale</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="hud">
+      <div id="player-count">Players: 1</div>
+      <div id="coords">X: 0, Y: 0</div>
+      <div id="my-health">HP: 100</div>
+      <div id="my-weapon">Weapon: pistol</div>
+    </div>
+
+    <div id="zone-name"></div>
+    <div id="zone-warning" class="hidden">⚠ OUTSIDE ZONE</div>
+    <div id="kill-feed"></div>
+    <div id="death-screen" class="hidden">YOU DIED</div>
+    <div id="jump-prompt" class="hidden">PRESS SPACE TO JUMP</div>
+
+    <div id="victory-overlay" style="display:none;">
+      <div class="v-title">WINNER WINNER</div>
+      <div class="v-sub" id="victory-sub">CHICKEN DINNER</div>
+      <div class="v-stats" id="victory-stats"></div>
+      <div class="v-timer" id="victory-timer">Next match in 10s...</div>
+    </div>
+
+    <div id="status">Connecting...</div>
+
+    <canvas id="minimap"></canvas>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="map.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
