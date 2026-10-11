@@ -107,10 +107,29 @@
 <!-- GAME CANVAS -->
 <div id="gameScreen" class="game-screen hidden">
   <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD: top -->
+  <div class="hud-top">
+    <div id="zoneName" class="hud-zone"></div>
+    <div id="stateLabel" class="hud-state">WALK</div>
+  </div>
+
+  <!-- HUD: joystick (left) -->
+  <div id="joyBase" class="joy-base">
+    <div id="joyStick" class="joy-stick"></div>
+  </div>
+
+  <!-- HUD: right side buttons -->
+  <div class="hud-right">
+    <button class="hud-btn" id="btnRun">RUN</button>
+    <button class="hud-btn" id="btnJump">JUMP</button>
+  </div>
 </div>
 
 <script src="orientation.js"></script>
 <script src="intro.js"></script>
 <script src="lobby.js"></script>
+<script src="map.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
