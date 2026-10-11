@@ -1,45 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#111111">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <title>Karnal Royale</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Karnal Royale</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-container">
-    <canvas id="game-canvas"></canvas>
 
-    <div id="hud">
-      <div id="player-count">Players: 1</div>
-      <div id="coords">X: 0, Y: 0</div>
-      <div id="my-health">HP: 100</div>
-      <div id="my-weapon">Weapon: pistol</div>
-    </div>
+<!-- ROTATE OVERLAY (portrait warning) -->
+<div id="rotateOverlay" class="rotate-overlay hidden">
+  <div class="rotate-inner">
+    <div class="rotate-phone">📱</div>
+    <h2>ROTATE YOUR PHONE</h2>
+    <p>Karnal Royale plays in landscape</p>
+  </div>
+</div>
 
-    <div id="zone-name"></div>
-    <div id="zone-warning" class="hidden">⚠ OUTSIDE ZONE</div>
-    <div id="kill-feed"></div>
-    <div id="death-screen" class="hidden">YOU DIED</div>
-    <div id="jump-prompt" class="hidden">PRESS SPACE TO JUMP</div>
+<!-- INTRO SEQUENCE -->
+<div id="introOverlay" class="intro-overlay">
+  <canvas id="particleCanvas"></canvas>
 
-    <div id="victory-overlay" style="display:none;">
-      <div class="v-title">WINNER WINNER</div>
-      <div class="v-sub" id="victory-sub">CHICKEN DINNER</div>
-      <div class="v-stats" id="victory-stats"></div>
-      <div class="v-timer" id="victory-timer">Next match in 10s...</div>
-    </div>
-
-    <div id="status">Connecting...</div>
-
-    <canvas id="minimap"></canvas>
+  <div id="phase1" class="intro-phase">
+    <h1 class="intro-title">
+      <span class="karnal">KARNAL</span>
+      <span class="royale">ROYALE</span>
+    </h1>
+    <div class="intro-sub">SEASON 01</div>
   </div>
 
-  <script src="https://karnal-royale.onrender.com/socket.io/socket.io.js"></script>
-  <script src="map.js"></script>
-  <script src="game.js"></script>
+  <div id="phase2" class="intro-phase hidden">
+    <img id="planeImg" src="assets/plane.png" alt="plane" class="plane-img">
+    <div class="plane-trail"></div>
+  </div>
+
+  <div id="phase3" class="intro-phase hidden">
+    <div class="powered-by">POWERED BY</div>
+    <div class="vaan">VAAN CONSULTANCY</div>
+  </div>
+
+  <button id="skipIntro" class="skip-btn">SKIP ▶</button>
+</div>
+
+<!-- LOBBY -->
+<div id="lobbyOverlay" class="lobby-overlay hidden">
+  <img src="assets/loby.png" alt="lobby" class="lobby-bg">
+  <div class="lobby-dark"></div>
+
+  <div class="lobby-top">
+    <div class="player-card">
+      <div class="player-avatar"></div>
+      <input id="playerName" class="player-name-input" type="text" maxlength="14" placeholder="YOUR NAME" value="PLAYER">
+    </div>
+    <div class="lobby-logo">
+      <span class="karnal">KARNAL</span>
+      <span class="royale">ROYALE</span>
+    </div>
+    <button id="lobbySettings" class="icon-btn">⚙</button>
+  </div>
+
+  <div class="lobby-center">
+    <div class="char-panel">
+      <div class="char-label">SELECT CHARACTER</div>
+      <div id="charStrip" class="char-strip"></div>
+      <div id="charName" class="char-name">MAN BLUE</div>
+    </div>
+
+    <div class="mode-panel">
+      <div class="mode-label">SELECT MODE</div>
+      <button class="mode-btn" data-mode="bots">
+        <span class="mode-icon">🤖</span>
+        <span class="mode-name">PLAY WITH BOTS</span>
+        <span class="mode-sub">19 bots · full map</span>
+      </button>
+      <button class="mode-btn" data-mode="friends">
+        <span class="mode-icon">👥</span>
+        <span class="mode-name">PLAY WITH FRIENDS</span>
+        <span class="mode-sub">room code · private</span>
+      </button>
+      <button class="mode-btn" data-mode="hybrid">
+        <span class="mode-icon">⚔</span>
+        <span class="mode-name">HYBRID</span>
+        <span class="mode-sub">friends + bots fill</span>
+      </button>
+      <button class="mode-btn" data-mode="quick">
+        <span class="mode-icon">⚡</span>
+        <span class="mode-name">QUICK MATCH</span>
+        <span class="mode-sub">2-min queue · auto-fill</span>
+      </button>
+      <button class="mode-btn" data-mode="team">
+        <span class="mode-icon">🛡</span>
+        <span class="mode-name">TEAM MODE</span>
+        <span class="mode-sub">next: 1v1</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="lobby-footer">
+    <div class="powered-tag">POWERED BY VAAN CONSULTANCY</div>
+    <button id="startBtn" class="start-btn">▶  DEPLOY</button>
+  </div>
+</div>
+
+<!-- GAME CANVAS -->
+<div id="gameScreen" class="game-screen hidden">
+  <canvas id="gameCanvas"></canvas>
+</div>
+
+<script src="orientation.js"></script>
+<script src="intro.js"></script>
+<script src="lobby.js"></script>
 </body>
 </html>
