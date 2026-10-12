@@ -7,6 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>Karnal Royale</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
@@ -18,7 +19,6 @@
   </div>
 </div>
 
-<!-- INTRO -->
 <div id="introOverlay" class="intro-overlay">
   <canvas id="particleCanvas"></canvas>
   <div id="phase1" class="intro-phase">
@@ -35,7 +35,6 @@
   <button id="skipIntro" class="skip-btn">SKIP ▶</button>
 </div>
 
-<!-- LOBBY -->
 <div id="lobbyOverlay" class="lobby-overlay hidden">
   <img src="assets/loby.png" alt="lobby" class="lobby-bg">
   <div class="lobby-dark"></div>
@@ -68,26 +67,20 @@
   </div>
 </div>
 
-<!-- GAME -->
 <div id="gameScreen" class="game-screen hidden">
-  <canvas id="gameCanvas"></canvas>
+  <div id="threeContainer" class="three-container"></div>
 
   <div class="hud-top">
-    <div id="zoneName" class="hud-zone">KARNAL</div>
+    <div id="zoneName" class="hud-zone">KARNAL ROYALE</div>
     <div id="stateLabel" class="hud-state">WALK</div>
-  </div>
-
-  <div class="zoom-wrap">
-    <button id="zoomIn"  class="zoom-btn">＋</button>
-    <button id="zoomOut" class="zoom-btn">−</button>
   </div>
 
   <div id="joyBase" class="joy-base">
     <div id="joyStick" class="joy-stick"></div>
   </div>
 
-  <div id="aimBase" class="joy-base aim-base">
-    <div id="aimStick" class="joy-stick aim-stick"></div>
+  <div id="lookBase" class="joy-base look-base">
+    <div id="lookStick" class="joy-stick look-stick"></div>
   </div>
 
   <div class="hud-right">
@@ -99,7 +92,6 @@
 <script src="orientation.js"></script>
 <script src="intro.js"></script>
 <script src="lobby.js"></script>
-<script src="map.js"></script>
-<script src="game.js"></script>
+<script src="world3d.js"></script>
 </body>
 </html>

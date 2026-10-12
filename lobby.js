@@ -1,5 +1,5 @@
 // ============================================
-// LOBBY.JS
+// LOBBY.JS — calls boot3D
 // ============================================
 
 const CHARACTERS = [
@@ -28,8 +28,6 @@ function buildCharStrip() {
   CHARACTERS.forEach((c, i) => {
     const div = document.createElement('div');
     div.className = 'char-item' + (i === 0 ? ' selected' : '');
-    div.dataset.charId = c.id;
-
     const img = document.createElement('img');
     img.src = `assets/${c.folder}/${c.sprite}`;
     img.alt = c.name;
@@ -71,18 +69,15 @@ function buildModeButtons() {
 function buildStartButton() {
   const start = document.getElementById('startBtn');
   if (!start) return;
-
   const doStart = () => {
     const playerName = (document.getElementById('playerName')?.value || 'PLAYER').trim() || 'PLAYER';
     document.getElementById('lobbyOverlay').classList.add('hidden');
-
-    if (typeof window.startGame === 'function') {
-      window.startGame({ playerName, character: selectedChar, mode: selectedMode });
+    if (typeof window.boot3D === 'function') {
+      window.boot3D({ playerName, character: selectedChar, mode: selectedMode });
     } else {
       document.getElementById('gameScreen').classList.remove('hidden');
     }
   };
-
   start.addEventListener('click', doStart);
   start.addEventListener('touchstart', (e) => { e.preventDefault(); doStart(); }, { passive: false });
 }
