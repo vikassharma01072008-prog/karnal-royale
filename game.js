@@ -1,6 +1,7 @@
 // ============================================
-// GAME.JS v3 — PHOTO WALL WORLD
-// Uses MAP's BUILDINGS array (which has .photo field)
+// GAME.JS v4 — FINAL
+// Waits for MAP.preloadMapAssets() before building panels
+// Uses MAP.imageCache['photo_' + zoneId] (matches map.js exactly)
 // ============================================
 
 let renderer, scene, camera;
@@ -37,16 +38,28 @@ function loadSpriteTexture(path) {
 }
 
 // ============================================
-// BOOT
+// BOOT — async, waits for preload
 // ============================================
-function boot3D(config) {
-  console.log('[KARNAL v3] boot3D', config);
+async function boot3D(config) {
+  console.log('[KARNAL v4] boot3D', config);
+
   container = document.getElementById('threeContainer');
   document.getElementById('gameScreen').classList.remove('hidden');
   document.getElementById('lobbyOverlay').classList.add('hidden');
   document.getElementById('introOverlay').classList.add('hidden');
   document.getElementById('endOverlay').classList.add('hidden');
 
+  // Show loading
+  showLoading(0);
+
+  // -------- PRELOAD ALL IMAGES FIRST --------
+  console.log('[KARNAL v4] preloading assets...');
+  await window.MAP.preloadMapAssets(p => showLoading(p));
+  console.log('[KARNAL v4] preload done. cache keys:', Object.keys(window.MAP.imageCache).length);
+
+  hideLoading();
+
+  // -------- Renderer --------
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -55,6 +68,7 @@ function boot3D(config) {
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
+  // -------- Scene --------
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
   scene.fog = new THREE.Fog(0x87a9c9, 1500, 3500);
@@ -77,6 +91,7 @@ function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
+  // -------- Build world (photos are loaded now) --------
   buildGround();
   buildRoads();
   buildWater();
@@ -84,10 +99,12 @@ function boot3D(config) {
   buildCoverObjects();
   buildTrees();
 
+  // -------- Player --------
   state.player = createPlayer(config, window.MAP.getSpawnPoint());
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
+  // -------- Bots --------
   state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
   for (const b of state.bots) {
     buildBotMesh(b);
@@ -103,8 +120,32 @@ function boot3D(config) {
 
   running = true;
   state.gameOver = false;
-  console.log('[KARNAL v3] loop starting');
+  console.log('[KARNAL v4] loop starting');
   requestAnimationFrame(loop);
+}
+
+// ============================================
+// LOADING OVERLAY
+// ============================================
+function showLoading(progress) {
+  let el = document.getElementById('karnalLoading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'karnalLoading';
+    el.style.cssText = 'position:fixed;inset:0;background:#0a0a0f;z-index:9000;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#ff8a3d;font-family:Arial;';
+    el.innerHTML = '<div style="font-size:32px;letter-spacing:6px;margin-bottom:20px;text-shadow:0 0 20px #ff4500;">KARNAL ROYALE</div><div style="width:60%;max-width:400px;height:8px;background:#222;border-radius:4px;overflow:hidden;"><div id="karnalLoadBar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff8a3d,#ff4500);transition:width 0.2s;"></div></div><div id="karnalLoadPct" style="margin-top:12px;font-size:14px;letter-spacing:3px;color:#888;">LOADING 0%</div>';
+    document.body.appendChild(el);
+  }
+  const pct = Math.round(progress * 100);
+  const bar = document.getElementById('karnalLoadBar');
+  const txt = document.getElementById('karnalLoadPct');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = 'LOADING ' + pct + '%';
+}
+
+function hideLoading() {
+  const el = document.getElementById('karnalLoading');
+  if (el) el.remove();
 }
 
 // ============================================
@@ -118,6 +159,7 @@ function buildGround() {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(120, 120);
     t.anisotropy = 8;
+    t.needsUpdate = true;
     mat = new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
   } else {
     mat = new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 1 });
@@ -143,6 +185,7 @@ function buildRoads() {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.repeat.set(Math.max(1, r.w/120), Math.max(1, r.d/120));
       t.anisotropy = 8;
+      t.needsUpdate = true;
       mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
     } else {
       mat = new THREE.MeshStandardMaterial({ color: r.color || 0x333333, roughness: 0.85 });
@@ -175,37 +218,24 @@ function buildWater() {
 }
 
 // ============================================
-// PHOTO PANELS — try multiple key patterns
+// PHOTO PANELS — uses MAP.BUILDINGS as source of truth
 // ============================================
-function getPhotoForZone(z) {
-  // Try every possible key pattern
-  const patterns = [
-    'photo_' + z.id,
-    'photo_' + (z.photo ? z.photo.replace('.png','') : ''),
-    z.id,
-    z.photo ? z.photo.replace('.png','') : ''
-  ];
-  for (const key of patterns) {
-    if (key && window.MAP.imageCache[key]) return window.MAP.imageCache[key];
-  }
-  // Last resort: scan imageCache for any key containing z.id
-  for (const key in window.MAP.imageCache) {
-    if (key.toLowerCase().includes(z.id.toLowerCase().split('_')[0])) {
-      if (window.MAP.imageCache[key]) return window.MAP.imageCache[key];
-    }
-  }
-  return null;
-}
-
 function buildPhotoPanels() {
   let built = 0;
-  for (const z of window.MAP.ZONES) {
-    const photo = getPhotoForZone(z);
-    if (!photo) { console.warn('no photo for', z.id); continue; }
+  const buildings = window.MAP.BUILDINGS || [];
+  console.log('[KARNAL v4] building panels from', buildings.length, 'buildings');
+
+  for (const b of buildings) {
+    // Photo key pattern that matches map.js preload: 'photo_' + b.id
+    const photo = window.MAP.imageCache['photo_' + b.id];
+    if (!photo) {
+      console.warn('no photo in cache for', b.id, '— expected key: photo_' + b.id);
+      continue;
+    }
     built++;
 
     const group = new THREE.Group();
-    group.position.set(z.x, 0, z.y);
+    group.position.set(b.x, 0, b.y);
 
     const PANEL_W = 90;
     const PANEL_H = 60;
@@ -224,17 +254,18 @@ function buildPhotoPanels() {
     frame.receiveShadow = true;
     group.add(frame);
 
-    // Photo texture
+    // Photo canvas
     const canvas = document.createElement('canvas');
     canvas.width = 1024; canvas.height = 683;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#111';
     ctx.fillRect(0, 0, 1024, 683);
-    try { ctx.drawImage(photo, 0, 0, 1024, 683); } catch(e) {}
+    try { ctx.drawImage(photo, 0, 0, 1024, 683); } catch(e) { console.warn('drawImage fail', b.id, e); }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.anisotropy = 8;
     tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
 
     const frontMat = new THREE.MeshBasicMaterial({ map: tex });
     const front = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W, PANEL_H), frontMat);
@@ -278,7 +309,8 @@ function buildPhotoPanels() {
     nctx.font = 'bold 76px Arial';
     nctx.textAlign = 'center';
     nctx.textBaseline = 'middle';
-    nctx.fillText(z.name, 512, 68);
+    const zoneName = (window.MAP.ZONES.find(z => z.id === b.id) || {}).name || b.id.toUpperCase();
+    nctx.fillText(zoneName, 512, 68);
     const nameTex = new THREE.CanvasTexture(nameCanvas);
     const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true });
     const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W + 20, 22), nameMat);
@@ -295,15 +327,19 @@ function buildPhotoPanels() {
     slab.receiveShadow = true;
     group.add(slab);
 
-    z._collision = {
-      x: z.x, y: z.y,
-      hw: (PANEL_W + 6)/2,
-      hh: (PANEL_T + 4)/2
-    };
+    // Register collision on the corresponding zone
+    const zone = window.MAP.ZONES.find(z => z.id === b.id);
+    if (zone) {
+      zone._collision = {
+        x: b.x, y: b.y,
+        hw: (PANEL_W + 6)/2,
+        hh: (PANEL_T + 4)/2
+      };
+    }
 
     worldGroup.add(group);
   }
-  console.log('[KARNAL v3] built photo panels:', built, 'of', window.MAP.ZONES.length);
+  console.log('[KARNAL v4] built photo panels:', built, 'of', buildings.length);
 }
 
 // ============================================
@@ -313,7 +349,6 @@ function buildCoverObjects() {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 1 });
   const crateMat = new THREE.MeshStandardMaterial({ color: 0x6a4a22, roughness: 0.9 });
   const barrelMat = new THREE.MeshStandardMaterial({ color: 0x8a3a2a, roughness: 0.7, metalness: 0.2 });
-
   const zones = window.MAP.ZONES;
 
   for (let i = 0; i < 60; i++) {
@@ -349,7 +384,7 @@ function buildCoverObjects() {
 }
 
 // ============================================
-// TREES — park zones only
+// TREES
 // ============================================
 function buildTrees() {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 1 });
