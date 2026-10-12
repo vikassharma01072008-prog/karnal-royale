@@ -1,6 +1,5 @@
 // ============================================
-// BOT.JS v3 — FINAL
-// Manbrown has no _machine.png → falls back to _gun.png
+// BOT.JS v6 — no zones, random positions on tilemap
 // ============================================
 
 const BOT_CHARS = ['soldier1', 'Hitman1', 'manblue', 'Manbrown', 'Robot1', 'Survivor1', 'WomanGreen'];
@@ -15,7 +14,6 @@ const CHAR_PREFIX = {
   'WomanGreen': 'womanGreen'
 };
 
-// Characters missing _machine.png — will use _gun.png instead
 const NO_MACHINE = ['Manbrown'];
 
 class Bot {
@@ -23,8 +21,8 @@ class Bot {
     this.id = id;
     this.x = spawnX; this.y = spawnY;
     this.hp = 100; this.maxHp = 100;
-    this.alive = true; this.radius = 22; this.angle = 0;
-    this.speed = 110 + Math.random() * 40;
+    this.alive = true; this.radius = 20; this.angle = 0;
+    this.speed = 130 + Math.random() * 50;
     this.state = 'patrol';
     this.targetX = spawnX; this.targetY = spawnY;
     this.nextThink = 0;
@@ -57,21 +55,21 @@ class Bot {
     const dy = player.y - this.y;
     const distToPlayer = Math.hypot(dx, dy);
 
+    // DECIDE STATE
     if (player.hp > 0 && distToPlayer < this.detectRange) {
       this.state = 'chase';
       if (distToPlayer < this.shootRange * 0.85) this.state = 'shoot';
     } else {
       if (this.nextThink <= 0) {
-        const zone = world.ZONES[Math.floor(Math.random() * world.ZONES.length)];
-        this.targetX = zone.x + (Math.random() - 0.5) * 400;
-        this.targetY = zone.y + (Math.random() - 0.5) * 400;
-        this.targetX = Math.max(80, Math.min(world.WORLD_W - 80, this.targetX));
-        this.targetY = Math.max(80, Math.min(world.WORLD_H - 80, this.targetY));
+        // pick random spot anywhere on map
+        this.targetX = 200 + Math.random() * (world.WORLD_W - 400);
+        this.targetY = 200 + Math.random() * (world.WORLD_H - 400);
         this.nextThink = 3 + Math.random() * 3;
       }
       this.state = 'patrol';
     }
 
+    // MOVE
     let moveX = 0, moveY = 0;
     if (this.state === 'chase' || this.state === 'patrol') {
       const tx = (this.state === 'chase' ? player.x : this.targetX) - this.x;
@@ -83,6 +81,7 @@ class Bot {
       this.walkFrame += dt * 8;
     }
 
+    // AIM
     if (this.state === 'shoot' || this.state === 'chase') {
       const targetAngle = Math.atan2(dy, dx);
       let diff = targetAngle - this.angle;
@@ -93,6 +92,7 @@ class Bot {
       this.angle = Math.atan2(moveY, moveX);
     }
 
+    // SHOOT
     if (this.state === 'shoot' && this.shootCooldown <= 0 && this.ammo > 0) {
       if (window.GAME && window.GAME.spawnBullet) {
         const spread = (Math.random() - 0.5) * 0.12;
@@ -105,6 +105,7 @@ class Bot {
       this.shootCooldown = 0.45 + Math.random() * 0.35;
     }
 
+    // BOUNDS
     this.x = Math.max(this.radius, Math.min(world.WORLD_W - this.radius, this.x));
     this.y = Math.max(this.radius, Math.min(world.WORLD_H - this.radius, this.y));
   }
@@ -132,20 +133,19 @@ class Bot {
   }
 }
 
+// --------------------------------------------
+// SPAWN N BOTS — random positions far from player
+// --------------------------------------------
 function spawnBots(count, playerSpawn, world) {
   const bots = [];
   const minDistFromPlayer = 900;
-  const spawnZones = world.ZONES.filter(z => !z.spawn && !z.water);
 
   for (let i = 0; i < count; i++) {
     let tries = 0;
     let bx, by;
     do {
-      const z = spawnZones[(i + tries) % spawnZones.length];
-      bx = z.x + (Math.random() - 0.5) * z.r * 1.5;
-      by = z.y + (Math.random() - 0.5) * z.r * 1.5;
-      bx = Math.max(100, Math.min(world.WORLD_W - 100, bx));
-      by = Math.max(100, Math.min(world.WORLD_H - 100, by));
+      bx = 300 + Math.random() * (world.WORLD_W - 600);
+      by = 300 + Math.random() * (world.WORLD_H - 600);
       tries++;
     } while (Math.hypot(bx - playerSpawn.x, by - playerSpawn.y) < minDistFromPlayer && tries < 30);
 
