@@ -7,6 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>Karnal Royale</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
@@ -68,40 +69,17 @@
   </div>
 </div>
 
-<!-- GAME -->
+<!-- GAME SCREEN -->
 <div id="gameScreen" class="game-screen hidden">
-  <canvas id="gameCanvas"></canvas>
-
   <div class="hud-top">
-    <div id="zoneName" class="hud-zone"></div>
+    <div id="zoneName" class="hud-zone">KARNAL</div>
     <div id="stateLabel" class="hud-state">WALK</div>
-  </div>
-
-  <div class="zoom-wrap">
-    <button id="zoomIn"  class="zoom-btn">＋</button>
-    <button id="zoomOut" class="zoom-btn">−</button>
-  </div>
-
-  <div id="joyBase" class="joy-base">
-    <div id="joyStick" class="joy-stick"></div>
-  </div>
-
-  <div id="aimBase" class="joy-base aim-base">
-    <div id="aimStick" class="joy-stick aim-stick"></div>
-  </div>
-
-  <div class="hud-right">
-    <button class="hud-btn run-btn"  id="btnRun">RUN</button>
-    <button class="hud-btn jump-btn" id="btnJump">JUMP</button>
-    <button class="hud-btn swim-btn" id="btnSwim" style="display:none">SWIM</button>
-    <button class="hud-btn surf-btn" id="btnSurf" style="display:none">SURF</button>
   </div>
 </div>
 
 <script src="orientation.js"></script>
 <script src="intro.js"></script>
 <script src="lobby.js"></script>
-<script src="map.js"></script>
-<script src="game.js"></script>
+<script src="world3d.js"></script>
 </body>
 </html>
