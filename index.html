@@ -7,7 +7,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>Karnal Royale</title>
 <link rel="stylesheet" href="style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
@@ -69,21 +68,26 @@
   </div>
 </div>
 
-<!-- GAME SCREEN (3D) -->
+<!-- GAME -->
 <div id="gameScreen" class="game-screen hidden">
-  <div id="threeContainer" class="three-container"></div>
+  <canvas id="gameCanvas"></canvas>
 
   <div class="hud-top">
-    <div id="zoneName" class="hud-zone">KARNAL ROYALE</div>
+    <div id="zoneName" class="hud-zone">KARNAL</div>
     <div id="stateLabel" class="hud-state">WALK</div>
+  </div>
+
+  <div class="zoom-wrap">
+    <button id="zoomIn"  class="zoom-btn">＋</button>
+    <button id="zoomOut" class="zoom-btn">−</button>
   </div>
 
   <div id="joyBase" class="joy-base">
     <div id="joyStick" class="joy-stick"></div>
   </div>
 
-  <div id="lookBase" class="joy-base look-base">
-    <div id="lookStick" class="joy-stick look-stick"></div>
+  <div id="aimBase" class="joy-base aim-base">
+    <div id="aimStick" class="joy-stick aim-stick"></div>
   </div>
 
   <div class="hud-right">
@@ -95,6 +99,7 @@
 <script src="orientation.js"></script>
 <script src="intro.js"></script>
 <script src="lobby.js"></script>
-<script src="world3d.js"></script>
+<script src="map.js"></script>
+<script src="game.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // ============================================
-// LOBBY.JS — fixed to call boot3D
+// LOBBY.JS
 // ============================================
 
 const CHARACTERS = [
@@ -54,7 +54,6 @@ function selectChar(c, el) {
   el.classList.add('selected');
   const cn = document.getElementById('charName');
   if (cn) cn.textContent = c.name;
-  try { localStorage.setItem('kr_char', JSON.stringify(c)); } catch (e) {}
 }
 
 function buildModeButtons() {
@@ -63,7 +62,6 @@ function buildModeButtons() {
       document.querySelectorAll('.mode-btn').forEach(b => b.style.background = '');
       btn.style.background = 'rgba(255,138,61,0.25)';
       selectedMode = btn.dataset.mode;
-      try { localStorage.setItem('kr_mode', selectedMode); } catch (e) {}
     });
   });
   const def = document.querySelector('.mode-btn[data-mode="bots"]');
@@ -75,19 +73,12 @@ function buildStartButton() {
   if (!start) return;
 
   const doStart = () => {
-    try {
-      const playerName = (document.getElementById('playerName')?.value || 'PLAYER').trim() || 'PLAYER';
-      localStorage.setItem('kr_name', playerName);
-      localStorage.setItem('kr_char', JSON.stringify(selectedChar));
-      localStorage.setItem('kr_mode', selectedMode);
-    } catch (e) {}
+    const playerName = (document.getElementById('playerName')?.value || 'PLAYER').trim() || 'PLAYER';
+    document.getElementById('lobbyOverlay').classList.add('hidden');
 
-    // Call the 3D boot
-    if (typeof window.boot3D === 'function') {
-      window.boot3D();
+    if (typeof window.startGame === 'function') {
+      window.startGame({ playerName, character: selectedChar, mode: selectedMode });
     } else {
-      // Fallback: just show gameScreen
-      document.getElementById('lobbyOverlay').classList.add('hidden');
       document.getElementById('gameScreen').classList.remove('hidden');
     }
   };
@@ -96,11 +87,4 @@ function buildStartButton() {
   start.addEventListener('touchstart', (e) => { e.preventDefault(); doStart(); }, { passive: false });
 }
 
-// Init when intro finishes (intro.js calls initLobby) or after 8s fallback
 window.initLobby = initLobby;
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    const lobby = document.getElementById('lobbyOverlay');
-    if (lobby && !lobby.classList.contains('hidden')) initLobby();
-  }, 8000);
-});
