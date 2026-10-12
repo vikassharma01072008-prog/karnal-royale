@@ -64,8 +64,29 @@ canvas { display: block; }
 
 /* GAME SCREEN */
 .game-screen { position: fixed; inset: 0; z-index: 3000; background: #0a0a0f; }
-.game-screen canvas { display: block; width: 100% !important; height: 100% !important; }
+.three-container { position: absolute; inset: 0; width: 100%; height: 100%; }
+.three-container canvas { display: block; width: 100% !important; height: 100% !important; }
 
 .hud-top { position: absolute; top: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 12px; z-index: 5; pointer-events: none; }
 .hud-zone { padding: 6px 18px; background: rgba(0,0,0,0.6); border: 1px solid rgba(0,255,200,0.5); border-radius: 20px; font-size: 13px; letter-spacing: 3px; color: #00ffc8; }
 .hud-state { padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; font-size: 12px; letter-spacing: 3px; color: #fff; }
+
+.joy-base { position: absolute; bottom: 30px; left: 40px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.22); z-index: 15; touch-action: none; }
+.joy-stick { position: absolute; top: 50%; left: 50%; width: 62px; height: 62px; border-radius: 50%; background: rgba(0,255,200,0.55); border: 2px solid #fff; transform: translate(-50%, -50%); pointer-events: none; }
+.look-base { left: auto; right: 40px; background: rgba(255,200,100,0.08); border-color: rgba(255,200,100,0.3); }
+.look-stick { background: rgba(255,200,100,0.55); }
+
+.hud-right { position: absolute; bottom: 185px; right: 40px; display: flex; flex-direction: column; gap: 10px; z-index: 15; }
+.hud-btn { width: 74px; height: 74px; border-radius: 50%; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.3); color: #fff; font-family: inherit; font-size: 11px; letter-spacing: 2px; font-weight: bold; cursor: pointer; }
+.hud-btn:active { background: rgba(0,255,200,0.5); border-color: #00ffc8; }
+.run-btn  { background: rgba(255,138,61,0.2); }
+.jump-btn { background: rgba(100,200,255,0.2); }
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .intro-title { font-size: 52px; }
+  .joy-base { width: 118px; height: 118px; bottom: 20px; left: 30px; }
+  .joy-stick { width: 52px; height: 52px; }
+  .look-base { left: auto; right: 30px; }
+  .hud-btn { width: 62px; height: 62px; font-size: 10px; }
+  .hud-right { bottom: 155px; right: 30px; }
+}
