@@ -1,7 +1,5 @@
 // ============================================
-// GAME.JS v4 — FINAL
-// Waits for MAP.preloadMapAssets() before building panels
-// Uses MAP.imageCache['photo_' + zoneId] (matches map.js exactly)
+// GAME.JS v5 — FIXED texture cloning
 // ============================================
 
 let renderer, scene, camera;
@@ -23,7 +21,7 @@ const controls = {
 };
 
 // ============================================
-// SPRITE LOADER
+// SPRITE LOADER (character sprites via THREE)
 // ============================================
 function loadSpriteTexture(path) {
   if (spriteCache[path] !== undefined) return spriteCache[path];
@@ -38,10 +36,23 @@ function loadSpriteTexture(path) {
 }
 
 // ============================================
-// BOOT — async, waits for preload
+// RAW IMAGE → THREE TEXTURE (for tiles)
+// ============================================
+function makeTileTexture(rawImg, repeatX, repeatY) {
+  if (!rawImg) return null;
+  const tex = new THREE.Texture(rawImg);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ============================================
+// BOOT
 // ============================================
 async function boot3D(config) {
-  console.log('[KARNAL v4] boot3D', config);
+  console.log('[KARNAL v5] boot3D', config);
 
   container = document.getElementById('threeContainer');
   document.getElementById('gameScreen').classList.remove('hidden');
@@ -49,17 +60,14 @@ async function boot3D(config) {
   document.getElementById('introOverlay').classList.add('hidden');
   document.getElementById('endOverlay').classList.add('hidden');
 
-  // Show loading
   showLoading(0);
 
-  // -------- PRELOAD ALL IMAGES FIRST --------
-  console.log('[KARNAL v4] preloading assets...');
+  console.log('[KARNAL v5] preloading assets...');
   await window.MAP.preloadMapAssets(p => showLoading(p));
-  console.log('[KARNAL v4] preload done. cache keys:', Object.keys(window.MAP.imageCache).length);
+  console.log('[KARNAL v5] preload done. cache keys:', Object.keys(window.MAP.imageCache).length);
 
   hideLoading();
 
-  // -------- Renderer --------
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -68,7 +76,6 @@ async function boot3D(config) {
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
-  // -------- Scene --------
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
   scene.fog = new THREE.Fog(0x87a9c9, 1500, 3500);
@@ -91,7 +98,6 @@ async function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
-  // -------- Build world (photos are loaded now) --------
   buildGround();
   buildRoads();
   buildWater();
@@ -99,12 +105,10 @@ async function boot3D(config) {
   buildCoverObjects();
   buildTrees();
 
-  // -------- Player --------
   state.player = createPlayer(config, window.MAP.getSpawnPoint());
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
-  // -------- Bots --------
   state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
   for (const b of state.bots) {
     buildBotMesh(b);
@@ -120,12 +124,12 @@ async function boot3D(config) {
 
   running = true;
   state.gameOver = false;
-  console.log('[KARNAL v4] loop starting');
+  console.log('[KARNAL v5] loop starting');
   requestAnimationFrame(loop);
 }
 
 // ============================================
-// LOADING OVERLAY
+// LOADING
 // ============================================
 function showLoading(progress) {
   let el = document.getElementById('karnalLoading');
@@ -142,7 +146,6 @@ function showLoading(progress) {
   if (bar) bar.style.width = pct + '%';
   if (txt) txt.textContent = 'LOADING ' + pct + '%';
 }
-
 function hideLoading() {
   const el = document.getElementById('karnalLoading');
   if (el) el.remove();
@@ -152,15 +155,11 @@ function hideLoading() {
 // GROUND
 // ============================================
 function buildGround() {
-  const grassTex = window.MAP.imageCache['tile_grass'];
+  const grassImg = window.MAP.imageCache['tile_grass'];
   let mat;
-  if (grassTex) {
-    const t = grassTex.clone();
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(120, 120);
-    t.anisotropy = 8;
-    t.needsUpdate = true;
-    mat = new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
+  if (grassImg) {
+    const tex = makeTileTexture(grassImg, 120, 120);
+    mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1 });
   } else {
     mat = new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 1 });
   }
@@ -176,17 +175,13 @@ function buildGround() {
 // ROADS
 // ============================================
 function buildRoads() {
-  const roadTex = window.MAP.imageCache['tile_road'];
+  const roadImg = window.MAP.imageCache['tile_road'];
   const roads = window.MAP.ROADS || [];
   for (const r of roads) {
     let mat;
-    if (roadTex) {
-      const t = roadTex.clone();
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(Math.max(1, r.w/120), Math.max(1, r.d/120));
-      t.anisotropy = 8;
-      t.needsUpdate = true;
-      mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
+    if (roadImg) {
+      const tex = makeTileTexture(roadImg, Math.max(1, r.w/120), Math.max(1, r.d/120));
+      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
     } else {
       mat = new THREE.MeshStandardMaterial({ color: r.color || 0x333333, roughness: 0.85 });
     }
@@ -218,18 +213,17 @@ function buildWater() {
 }
 
 // ============================================
-// PHOTO PANELS — uses MAP.BUILDINGS as source of truth
+// PHOTO PANELS
 // ============================================
 function buildPhotoPanels() {
   let built = 0;
   const buildings = window.MAP.BUILDINGS || [];
-  console.log('[KARNAL v4] building panels from', buildings.length, 'buildings');
+  console.log('[KARNAL v5] building panels from', buildings.length, 'buildings');
 
   for (const b of buildings) {
-    // Photo key pattern that matches map.js preload: 'photo_' + b.id
     const photo = window.MAP.imageCache['photo_' + b.id];
     if (!photo) {
-      console.warn('no photo in cache for', b.id, '— expected key: photo_' + b.id);
+      console.warn('no photo in cache for', b.id);
       continue;
     }
     built++;
@@ -241,7 +235,6 @@ function buildPhotoPanels() {
     const PANEL_H = 60;
     const PANEL_T = 2;
 
-    // Frame
     const frameMat = new THREE.MeshStandardMaterial({
       color: 0x1a1a1a, metalness: 0.6, roughness: 0.35
     });
@@ -254,7 +247,7 @@ function buildPhotoPanels() {
     frame.receiveShadow = true;
     group.add(frame);
 
-    // Photo canvas
+    // Draw photo onto canvas so we control crop/size
     const canvas = document.createElement('canvas');
     canvas.width = 1024; canvas.height = 683;
     const ctx = canvas.getContext('2d');
@@ -317,7 +310,7 @@ function buildPhotoPanels() {
     nameMesh.position.set(0, PANEL_H + 16, PANEL_T/2 + 0.3);
     group.add(nameMesh);
 
-    // Base slab
+    // Slab
     const slabMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 });
     const slab = new THREE.Mesh(
       new THREE.BoxGeometry(PANEL_W + 20, 1, PANEL_T + 16),
@@ -327,7 +320,6 @@ function buildPhotoPanels() {
     slab.receiveShadow = true;
     group.add(slab);
 
-    // Register collision on the corresponding zone
     const zone = window.MAP.ZONES.find(z => z.id === b.id);
     if (zone) {
       zone._collision = {
@@ -339,7 +331,7 @@ function buildPhotoPanels() {
 
     worldGroup.add(group);
   }
-  console.log('[KARNAL v4] built photo panels:', built, 'of', buildings.length);
+  console.log('[KARNAL v5] built photo panels:', built, 'of', buildings.length);
 }
 
 // ============================================
@@ -392,7 +384,6 @@ function buildTrees() {
   const parkZones = window.MAP.ZONES.filter(z =>
     ['atal_park','ndri','mall','karan_lake'].includes(z.id)
   );
-
   for (let i = 0; i < 40; i++) {
     const z = parkZones[i % parkZones.length];
     const x = z.x + (Math.random() - 0.5) * 600;
