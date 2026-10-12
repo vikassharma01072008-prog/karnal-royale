@@ -1,66 +1,54 @@
 // ============================================
-// MAP.JS v6 — TILEMAP WORLD
-// 20x20 grid of tiles from assets/tile/
-// No zones yet — pure tilemap battle royale field
+// MAP.JS v6.1 — FIXED GRID (exactly 20 rows)
 // ============================================
 
 const WORLD_W = 4000;
 const WORLD_H = 4000;
 const ASSET = 'assets/';
 
-// Tile grid: 20 columns x 20 rows
 const GRID_COLS = 20;
 const GRID_ROWS = 20;
-const TILE_SIZE = WORLD_W / GRID_COLS; // 200 units per tile
+const TILE_SIZE = WORLD_W / GRID_COLS;
 
-// --------------------------------------------
-// TILE TYPES — files live in assets/tile/
-// --------------------------------------------
 const TILE_FILES = {
-  grass:    'grass.png',
-  road:     'road.png',
-  turn:     'turn.png',
-  uturn:    'uturn.png',
-  four:     'four.png',
-  highway:  'highway.png',
-  rail:     'rail.png',
-  side:     'side.png',
-  run:      'run.png',
-  brick:    'brick.png'
+  grass:   'grass.png',
+  road:    'road.png',
+  turn:    'turn.png',
+  uturn:   'uturn.png',
+  four:    'four.png',
+  highway: 'highway.png',
+  rail:    'rail.png',
+  side:    'side.png',
+  run:     'run.png',
+  brick:   'brick.png'
 };
 
-// --------------------------------------------
-// THE GRID — 20 rows x 20 cols
-// g = grass, r = road, t = turn, u = uturn,
-// 4 = four-way, h = highway, l = rail,
-// s = side, d = dirt/run, b = brick
-// --------------------------------------------
+// ============================================
+// THE GRID — EXACTLY 20 rows x 20 chars each
+// g=grass r=road t=turn u=uturn 4=four
+// h=highway l=rail s=side d=run b=brick
+// ============================================
 const GRID = [
-  // row 0
-  'gggggggggggggggggggg',
-  'gggggggggggggggggggg',
-  'gggggggggggggggggggg',
-  'gggggggggggggggggggg',
-  // row 4  — top area / lake side
-  'gggggggggggggggggggg',
-  'ggggggrrggggrrgggggg',
-  'ggggggrrggggrrgggggg',
-  // row 7 — cross road top
-  'ggggggrrggggrrgggggg',
-  'rrrrrr44rrrr44rrrrrr',
-  'ggggggrrggggrrgggggg',
-  // row 10 — center (haveli / stadium)
-  'ggggggrrggggrrgggggg',
-  'rrrrrr44rrrr44rrrrrr',
-  'ggggggrrggggrrgggggg',
-  // row 13 — mid south
-  'ggggggrrggggrrgggggg',
-  'rrrrrr44rrrr44rrrrrr',
-  'ggggggrrggggrrgggggg',
-  // row 16 — south
-  'ggggggrrggggrrgggggg',
-  'rrrrrr44rrrr44rrrrrr',
-  'ggggggrrggggrrgggggg'
+  'gggggggggggggggggggg', // 0
+  'gggggggggggggggggggg', // 1
+  'gggggggggggggggggggg', // 2
+  'gggggggggggggggggggg', // 3
+  'ggggggrrggggrrgggggg', // 4
+  'ggggggrrggggrrgggggg', // 5
+  'ggggggrrggggrrgggggg', // 6
+  'ggggggrrggggrrgggggg', // 7
+  'rrrrrr44rrrr44rrrrrr', // 8  ← cross road
+  'ggggggrrggggrrgggggg', // 9
+  'ggggggrrggggrrgggggg', // 10
+  'rrrrrr44rrrr44rrrrrr', // 11 ← cross road
+  'ggggggrrggggrrgggggg', // 12
+  'ggggggrrggggrrgggggg', // 13
+  'rrrrrr44rrrr44rrrrrr', // 14 ← cross road
+  'ggggggrrggggrrgggggg', // 15
+  'ggggggrrggggrrgggggg', // 16
+  'rrrrrr44rrrr44rrrrrr', // 17 ← cross road
+  'ggggggrrggggrrgggggg', // 18
+  'ggggggrrggggrrgggggg'  // 19
 ];
 
 // --------------------------------------------
@@ -78,7 +66,7 @@ function loadImage(key, src) {
 }
 
 // --------------------------------------------
-// PRELOAD — only 10 tiles
+// PRELOAD
 // --------------------------------------------
 async function preloadMapAssets(onProgress) {
   const entries = Object.entries(TILE_FILES);
@@ -93,11 +81,11 @@ async function preloadMapAssets(onProgress) {
   );
 
   await Promise.all(tasks);
-  console.log('[MAP v6] preloaded', done, 'tiles');
+  console.log('[MAP v6.1] preloaded', done, 'tiles');
 }
 
 // --------------------------------------------
-// GET TILE TYPE AT WORLD POSITION
+// HELPERS
 // --------------------------------------------
 function charToType(c) {
   switch (c) {
@@ -116,7 +104,11 @@ function charToType(c) {
 
 function getTileTypeAt(col, row) {
   if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS) return 'grass';
-  return charToType(GRID[row][col]);
+  const rowStr = GRID[row];
+  if (!rowStr) return 'grass';
+  const c = rowStr[col];
+  if (!c) return 'grass';
+  return charToType(c);
 }
 
 // --------------------------------------------
