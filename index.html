@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
 <title>Karnal Royale</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
+<!-- ============ ROTATE OVERLAY ============ -->
 <div id="rotateOverlay" class="rotate-overlay hidden">
   <div class="rotate-inner">
     <div class="rotate-phone">📱</div>
@@ -19,6 +21,7 @@
   </div>
 </div>
 
+<!-- ============ INTRO ============ -->
 <div id="introOverlay" class="intro-overlay">
   <canvas id="particleCanvas"></canvas>
   <div id="phase1" class="intro-phase">
@@ -35,6 +38,7 @@
   <button id="skipIntro" class="skip-btn">SKIP ▶</button>
 </div>
 
+<!-- ============ LOBBY ============ -->
 <div id="lobbyOverlay" class="lobby-overlay hidden">
   <img src="assets/loby.png" alt="lobby" class="lobby-bg">
   <div class="lobby-dark"></div>
@@ -67,31 +71,68 @@
   </div>
 </div>
 
+<!-- ============ GAME SCREEN ============ -->
 <div id="gameScreen" class="game-screen hidden">
   <div id="threeContainer" class="three-container"></div>
 
+  <!-- HUD TOP: health, kills, alive, zone -->
   <div class="hud-top">
-    <div id="zoneName" class="hud-zone">KARNAL ROYALE</div>
-    <div id="stateLabel" class="hud-state">WALK</div>
+    <div class="hud-left">
+      <div class="hp-bar-bg"><div id="hpBar" class="hp-bar"></div><span id="hpText" class="hp-text">100</span></div>
+      <div class="hud-stat">⚔ <span id="killCount">0</span></div>
+      <div class="hud-stat">👥 <span id="aliveCount">6</span></div>
+    </div>
+    <div class="hud-center">
+      <div id="zoneName" class="hud-zone">KARNAL</div>
+    </div>
+    <div class="hud-right-top">
+      <div class="hud-stat ammo-stat">🔫 <span id="ammoCount">30</span></div>
+      <div class="hud-stat" id="stateLabel">WALK</div>
+    </div>
   </div>
 
+  <!-- MINIMAP top right -->
+  <div id="minimapWrap" class="minimap-wrap">
+    <canvas id="minimap" width="180" height="180"></canvas>
+    <div class="minimap-label">KARNAL ROYALE</div>
+  </div>
+
+  <!-- LEFT JOYSTICK = move -->
   <div id="joyBase" class="joy-base">
     <div id="joyStick" class="joy-stick"></div>
   </div>
 
-  <div id="lookBase" class="joy-base look-base">
-    <div id="lookStick" class="joy-stick look-stick"></div>
+  <!-- RIGHT JOYSTICK = aim + fire -->
+  <div id="aimBase" class="joy-base aim-base">
+    <div id="aimStick" class="joy-stick aim-stick"></div>
   </div>
 
-  <div class="hud-right">
-    <button class="hud-btn run-btn"  id="btnRun">RUN</button>
-    <button class="hud-btn jump-btn" id="btnJump">JUMP</button>
+  <!-- HUD BUTTONS right side -->
+  <div class="hud-actions">
+    <button class="hud-btn reload-btn" id="btnReload">RELOAD</button>
+    <button class="hud-btn jump-btn"   id="btnJump">JUMP</button>
+  </div>
+
+  <!-- Kill feed -->
+  <div id="killFeed" class="kill-feed"></div>
+
+  <!-- Win / Death overlay -->
+  <div id="endOverlay" class="end-overlay hidden">
+    <div class="end-inner">
+      <div id="endTitle" class="end-title">VICTORY</div>
+      <div id="endSub" class="end-sub">You are the last one standing</div>
+      <button id="endBtn" class="end-btn">BACK TO LOBBY</button>
+    </div>
   </div>
 </div>
 
+<!-- ============ SCRIPTS ============ -->
 <script src="orientation.js"></script>
 <script src="intro.js"></script>
+<script src="map.js"></script>
+<script src="minimap.js"></script>
+<script src="bot.js"></script>
+<script src="game.js"></script>
 <script src="lobby.js"></script>
-<script src="world3d.js"></script>
 </body>
 </html>
