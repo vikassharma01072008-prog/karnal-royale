@@ -1,7 +1,6 @@
 // ============================================
-// GAME.JS v2 — PHOTO WALL WORLD
-// Each zone = giant fixed photo panel on grass terrain
-// Connected by roads. Fight around them.
+// GAME.JS v3 — PHOTO WALL WORLD
+// Uses MAP's BUILDINGS array (which has .photo field)
 // ============================================
 
 let renderer, scene, camera;
@@ -41,14 +40,13 @@ function loadSpriteTexture(path) {
 // BOOT
 // ============================================
 function boot3D(config) {
-  console.log('[KARNAL v2] boot3D', config);
+  console.log('[KARNAL v3] boot3D', config);
   container = document.getElementById('threeContainer');
   document.getElementById('gameScreen').classList.remove('hidden');
   document.getElementById('lobbyOverlay').classList.add('hidden');
   document.getElementById('introOverlay').classList.add('hidden');
   document.getElementById('endOverlay').classList.add('hidden');
 
-  // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -57,15 +55,12 @@ function boot3D(config) {
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
-  // Scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
   scene.fog = new THREE.Fog(0x87a9c9, 1500, 3500);
 
-  // Camera (45° tilted top-down)
   camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 1, 6000);
 
-  // Lights
   scene.add(new THREE.AmbientLight(0xffffff, 0.75));
   scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.5));
   const sun = new THREE.DirectionalLight(0xfff2d8, 0.85);
@@ -82,7 +77,6 @@ function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
-  // Build world
   buildGround();
   buildRoads();
   buildWater();
@@ -90,12 +84,10 @@ function boot3D(config) {
   buildCoverObjects();
   buildTrees();
 
-  // Player
   state.player = createPlayer(config, window.MAP.getSpawnPoint());
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
-  // Bots
   state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
   for (const b of state.bots) {
     buildBotMesh(b);
@@ -111,12 +103,12 @@ function boot3D(config) {
 
   running = true;
   state.gameOver = false;
-  console.log('[KARNAL v2] loop starting');
+  console.log('[KARNAL v3] loop starting');
   requestAnimationFrame(loop);
 }
 
 // ============================================
-// GROUND — grass texture everywhere
+// GROUND
 // ============================================
 function buildGround() {
   const grassTex = window.MAP.imageCache['tile_grass'];
@@ -139,11 +131,12 @@ function buildGround() {
 }
 
 // ============================================
-// ROADS — thicker, clearer, connect zones
+// ROADS
 // ============================================
 function buildRoads() {
   const roadTex = window.MAP.imageCache['tile_road'];
-  for (const r of window.MAP.ROADS) {
+  const roads = window.MAP.ROADS || [];
+  for (const r of roads) {
     let mat;
     if (roadTex) {
       const t = roadTex.clone();
@@ -152,7 +145,7 @@ function buildRoads() {
       t.anisotropy = 8;
       mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
     } else {
-      mat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.85 });
+      mat = new THREE.MeshStandardMaterial({ color: r.color || 0x333333, roughness: 0.85 });
     }
     const geo = new THREE.PlaneGeometry(r.w, r.d);
     const m = new THREE.Mesh(geo, mat);
@@ -182,23 +175,43 @@ function buildWater() {
 }
 
 // ============================================
-// PHOTO PANELS — THE MAIN ATTRACTION
-// Each zone = giant fixed photo wall (50m tall)
+// PHOTO PANELS — try multiple key patterns
 // ============================================
+function getPhotoForZone(z) {
+  // Try every possible key pattern
+  const patterns = [
+    'photo_' + z.id,
+    'photo_' + (z.photo ? z.photo.replace('.png','') : ''),
+    z.id,
+    z.photo ? z.photo.replace('.png','') : ''
+  ];
+  for (const key of patterns) {
+    if (key && window.MAP.imageCache[key]) return window.MAP.imageCache[key];
+  }
+  // Last resort: scan imageCache for any key containing z.id
+  for (const key in window.MAP.imageCache) {
+    if (key.toLowerCase().includes(z.id.toLowerCase().split('_')[0])) {
+      if (window.MAP.imageCache[key]) return window.MAP.imageCache[key];
+    }
+  }
+  return null;
+}
+
 function buildPhotoPanels() {
+  let built = 0;
   for (const z of window.MAP.ZONES) {
-    const photo = window.MAP.imageCache['photo_' + z.id];
+    const photo = getPhotoForZone(z);
     if (!photo) { console.warn('no photo for', z.id); continue; }
+    built++;
 
     const group = new THREE.Group();
     group.position.set(z.x, 0, z.y);
 
-    // Panel dimensions — LARGE
-    const PANEL_W = 90;   // 90 meters wide
-    const PANEL_H = 60;   // 60 meters tall
-    const PANEL_T = 2;    // 2 meters thick
+    const PANEL_W = 90;
+    const PANEL_H = 60;
+    const PANEL_T = 2;
 
-    // Frame (dark metallic box) — slightly bigger than photo
+    // Frame
     const frameMat = new THREE.MeshStandardMaterial({
       color: 0x1a1a1a, metalness: 0.6, roughness: 0.35
     });
@@ -211,7 +224,7 @@ function buildPhotoPanels() {
     frame.receiveShadow = true;
     group.add(frame);
 
-    // Photo texture — canvas so we can draw custom
+    // Photo texture
     const canvas = document.createElement('canvas');
     canvas.width = 1024; canvas.height = 683;
     const ctx = canvas.getContext('2d');
@@ -223,48 +236,36 @@ function buildPhotoPanels() {
     tex.anisotropy = 8;
     tex.magFilter = THREE.LinearFilter;
 
-    // Front face — visible from +Z direction (fixed orientation)
     const frontMat = new THREE.MeshBasicMaterial({ map: tex });
-    const front = new THREE.Mesh(
-      new THREE.PlaneGeometry(PANEL_W, PANEL_H),
-      frontMat
-    );
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W, PANEL_H), frontMat);
     front.position.set(0, PANEL_H/2, PANEL_T/2 + 0.1);
     group.add(front);
 
-    // Back face — mirrored
-    const back = new THREE.Mesh(
-      new THREE.PlaneGeometry(PANEL_W, PANEL_H),
-      frontMat
-    );
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W, PANEL_H), frontMat);
     back.position.set(0, PANEL_H/2, -PANEL_T/2 - 0.1);
     back.rotation.y = Math.PI;
     group.add(back);
 
-    // Glowing border ring around front
+    // Glow border
     const glowMat = new THREE.MeshBasicMaterial({
       color: 0x00ffc8, transparent: true, opacity: 0.85
     });
     const bw = PANEL_W + 6;
     const bh = PANEL_H + 6;
-    // top
     const gTop = new THREE.Mesh(new THREE.PlaneGeometry(bw, 0.8), glowMat);
     gTop.position.set(0, PANEL_H + 2.6, PANEL_T/2 + 0.2);
     group.add(gTop);
-    // bottom
     const gBot = new THREE.Mesh(new THREE.PlaneGeometry(bw, 0.8), glowMat);
-    gBot.position.set(0, -2.6 + 3, PANEL_T/2 + 0.2);
+    gBot.position.set(0, 0.4, PANEL_T/2 + 0.2);
     group.add(gBot);
-    // left
     const gL = new THREE.Mesh(new THREE.PlaneGeometry(0.8, bh), glowMat);
     gL.position.set(-bw/2, PANEL_H/2, PANEL_T/2 + 0.2);
     group.add(gL);
-    // right
     const gR = new THREE.Mesh(new THREE.PlaneGeometry(0.8, bh), glowMat);
     gR.position.set(bw/2, PANEL_H/2, PANEL_T/2 + 0.2);
     group.add(gR);
 
-    // Zone name banner above panel
+    // Name banner
     const nameCanvas = document.createElement('canvas');
     nameCanvas.width = 1024; nameCanvas.height = 128;
     const nctx = nameCanvas.getContext('2d');
@@ -284,7 +285,7 @@ function buildPhotoPanels() {
     nameMesh.position.set(0, PANEL_H + 16, PANEL_T/2 + 0.3);
     group.add(nameMesh);
 
-    // Base concrete slab
+    // Base slab
     const slabMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 });
     const slab = new THREE.Mesh(
       new THREE.BoxGeometry(PANEL_W + 20, 1, PANEL_T + 16),
@@ -294,7 +295,6 @@ function buildPhotoPanels() {
     slab.receiveShadow = true;
     group.add(slab);
 
-    // Register collision
     z._collision = {
       x: z.x, y: z.y,
       hw: (PANEL_W + 6)/2,
@@ -303,10 +303,11 @@ function buildPhotoPanels() {
 
     worldGroup.add(group);
   }
+  console.log('[KARNAL v3] built photo panels:', built, 'of', window.MAP.ZONES.length);
 }
 
 // ============================================
-// COVER OBJECTS — rocks, crates, barrels
+// COVER OBJECTS
 // ============================================
 function buildCoverObjects() {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 1 });
@@ -321,26 +322,22 @@ function buildCoverObjects() {
     const y = z.y + (Math.random() - 0.5) * 700;
     if (x < 100 || x > window.MAP.WORLD_W - 100) continue;
     if (y < 100 || y > window.MAP.WORLD_H - 100) continue;
-    // skip if inside a photo panel
     if (z._collision && Math.abs(x - z._collision.x) < z._collision.hw + 40
         && Math.abs(y - z._collision.y) < z._collision.hh + 40) continue;
 
     const roll = Math.random();
     let mesh;
     if (roll < 0.4) {
-      // rock
       const s = 8 + Math.random() * 12;
       mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
       mesh.position.set(x, s * 0.6, y);
       mesh.rotation.y = Math.random() * Math.PI * 2;
     } else if (roll < 0.7) {
-      // crate
       const s = 10 + Math.random() * 6;
       mesh = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), crateMat);
       mesh.position.set(x, s/2, y);
       mesh.rotation.y = Math.random() * Math.PI * 2;
     } else {
-      // barrel
       const s = 8;
       mesh = new THREE.Mesh(new THREE.CylinderGeometry(s/2, s/2, s*1.4, 12), barrelMat);
       mesh.position.set(x, s*0.7, y);
@@ -352,7 +349,7 @@ function buildCoverObjects() {
 }
 
 // ============================================
-// TREES — only in park zones
+// TREES — park zones only
 // ============================================
 function buildTrees() {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 1 });
@@ -442,7 +439,7 @@ function buildBotMesh(bot) {
 }
 
 // ============================================
-// COLLISION — block player from walking through panels
+// COLLISION
 // ============================================
 function resolveCollisions(entity) {
   for (const z of window.MAP.ZONES) {
@@ -451,7 +448,6 @@ function resolveCollisions(entity) {
     const dx = entity.x - c.x;
     const dy = entity.y - c.y;
     if (Math.abs(dx) < c.hw + entity.radius && Math.abs(dy) < c.hh + entity.radius) {
-      // push out along smallest axis
       const overlapX = (c.hw + entity.radius) - Math.abs(dx);
       const overlapY = (c.hh + entity.radius) - Math.abs(dy);
       if (overlapX < overlapY) {
@@ -558,7 +554,6 @@ function updateBullets(dt) {
     b.mesh.position.set(b.x, 50, b.y);
     let hit = false;
 
-    // Wall collision
     for (const z of window.MAP.ZONES) {
       if (!z._collision) continue;
       const c = z._collision;

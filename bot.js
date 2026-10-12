@@ -1,12 +1,10 @@
 // ============================================
-// BOT.JS — Enemy AI for Karnal Royale
-// Bots: patrol, chase, aim, shoot, take damage, die
+// BOT.JS v3 — FINAL
+// Manbrown has no _machine.png → falls back to _gun.png
 // ============================================
 
-// Bot character folders to use (each bot picks one)
 const BOT_CHARS = ['soldier1', 'Hitman1', 'manblue', 'Manbrown', 'Robot1', 'Survivor1', 'WomanGreen'];
 
-// Map folder → file prefix mapping
 const CHAR_PREFIX = {
   'Hitman1':    'hitman1',
   'manblue':    'manBlue',
@@ -17,57 +15,40 @@ const CHAR_PREFIX = {
   'WomanGreen': 'womanGreen'
 };
 
-// --------------------------------------------
-// BOT CLASS
-// --------------------------------------------
+// Characters missing _machine.png — will use _gun.png instead
+const NO_MACHINE = ['Manbrown'];
+
 class Bot {
   constructor(id, spawnX, spawnY) {
     this.id = id;
-    this.x = spawnX;
-    this.y = spawnY;
-    this.hp = 100;
-    this.maxHp = 100;
-    this.alive = true;
-    this.radius = 22;
-    this.angle = 0;
-    this.speed = 110 + Math.random() * 40; // world units per sec
-    this.state = 'patrol'; // patrol | chase | shoot | dead
-    this.targetX = spawnX;
-    this.targetY = spawnY;
+    this.x = spawnX; this.y = spawnY;
+    this.hp = 100; this.maxHp = 100;
+    this.alive = true; this.radius = 22; this.angle = 0;
+    this.speed = 110 + Math.random() * 40;
+    this.state = 'patrol';
+    this.targetX = spawnX; this.targetY = spawnY;
     this.nextThink = 0;
     this.shootCooldown = 0;
     this.shootRange = 520;
     this.detectRange = 700;
     this.reloadTimer = 0;
-    this.ammo = 30;
-    this.maxAmmo = 30;
+    this.ammo = 30; this.maxAmmo = 30;
     this.reloadDuration = 2.2;
-    this.hitFlash = 0;
-    this.walkFrame = 0;
+    this.hitFlash = 0; this.walkFrame = 0;
 
-    // Pick a character sprite
     const folder = BOT_CHARS[id % BOT_CHARS.length];
     this.charFolder = folder;
     this.prefix = CHAR_PREFIX[folder];
     this.name = 'BOT_' + (id + 1);
+    this.hasMachine = !NO_MACHINE.includes(folder);
   }
 
-  // ------------
   update(dt, player, world) {
     if (!this.alive) return;
     if (this.hitFlash > 0) this.hitFlash -= dt;
 
-    // Reload handling
-    if (this.reloadTimer > 0) {
-      this.reloadTimer -= dt;
-      this.state = 'reload';
-      return;
-    }
-    if (this.ammo <= 0) {
-      this.reloadTimer = this.reloadDuration;
-      this.ammo = this.maxAmmo;
-      return;
-    }
+    if (this.reloadTimer > 0) { this.reloadTimer -= dt; this.state = 'reload'; return; }
+    if (this.ammo <= 0) { this.reloadTimer = this.reloadDuration; this.ammo = this.maxAmmo; return; }
 
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
     this.nextThink -= dt;
@@ -76,13 +57,11 @@ class Bot {
     const dy = player.y - this.y;
     const distToPlayer = Math.hypot(dx, dy);
 
-    // -------- DECIDE STATE --------
     if (player.hp > 0 && distToPlayer < this.detectRange) {
       this.state = 'chase';
       if (distToPlayer < this.shootRange * 0.85) this.state = 'shoot';
     } else {
       if (this.nextThink <= 0) {
-        // pick new patrol point
         const zone = world.ZONES[Math.floor(Math.random() * world.ZONES.length)];
         this.targetX = zone.x + (Math.random() - 0.5) * 400;
         this.targetY = zone.y + (Math.random() - 0.5) * 400;
@@ -93,22 +72,18 @@ class Bot {
       this.state = 'patrol';
     }
 
-    // -------- MOVE --------
     let moveX = 0, moveY = 0;
     if (this.state === 'chase' || this.state === 'patrol') {
       const tx = (this.state === 'chase' ? player.x : this.targetX) - this.x;
       const ty = (this.state === 'chase' ? player.y : this.targetY) - this.y;
       const tl = Math.hypot(tx, ty) || 1;
-      moveX = tx / tl;
-      moveY = ty / tl;
+      moveX = tx / tl; moveY = ty / tl;
       this.x += moveX * this.speed * dt;
       this.y += moveY * this.speed * dt;
       this.walkFrame += dt * 8;
     }
 
-    // -------- AIM --------
     if (this.state === 'shoot' || this.state === 'chase') {
-      // Smooth aim toward player
       const targetAngle = Math.atan2(dy, dx);
       let diff = targetAngle - this.angle;
       while (diff >  Math.PI) diff -= Math.PI * 2;
@@ -118,9 +93,7 @@ class Bot {
       this.angle = Math.atan2(moveY, moveX);
     }
 
-    // -------- SHOOT --------
     if (this.state === 'shoot' && this.shootCooldown <= 0 && this.ammo > 0) {
-      // fire!
       if (window.GAME && window.GAME.spawnBullet) {
         const spread = (Math.random() - 0.5) * 0.12;
         const a = this.angle + spread;
@@ -132,46 +105,36 @@ class Bot {
       this.shootCooldown = 0.45 + Math.random() * 0.35;
     }
 
-    // -------- BOUNDS --------
     this.x = Math.max(this.radius, Math.min(world.WORLD_W - this.radius, this.x));
     this.y = Math.max(this.radius, Math.min(world.WORLD_H - this.radius, this.y));
   }
 
-  // ------------
   takeDamage(amount, fromId) {
     if (!this.alive) return;
     this.hp -= amount;
     this.hitFlash = 0.15;
     if (this.hp <= 0) {
-      this.hp = 0;
-      this.alive = false;
-      this.state = 'dead';
-      if (window.GAME && window.GAME.onBotKilled) {
-        window.GAME.onBotKilled(this, fromId);
-      }
+      this.hp = 0; this.alive = false; this.state = 'dead';
+      if (window.GAME && window.GAME.onBotKilled) window.GAME.onBotKilled(this, fromId);
     }
   }
 
-  // ------------
-  // What sprite to show
   getSprite() {
     const base = 'assets/' + this.charFolder + '/';
     if (this.state === 'reload') return base + this.prefix + '_reload.png';
-    if (this.state === 'shoot')  return base + this.prefix + '_machine.png';
-    if (this.state === 'chase')  return base + this.prefix + '_hold.png';
-    if (this.walkFrame > 0)      return base + this.prefix + '_hold.png';
+    if (this.state === 'shoot') {
+      if (this.hasMachine) return base + this.prefix + '_machine.png';
+      return base + this.prefix + '_gun.png';
+    }
+    if (this.state === 'chase') return base + this.prefix + '_hold.png';
+    if (this.walkFrame > 0)     return base + this.prefix + '_hold.png';
     return base + this.prefix + '_stand.png';
   }
 }
 
-// --------------------------------------------
-// SPAWN N BOTS (spread across map, not near player)
-// --------------------------------------------
 function spawnBots(count, playerSpawn, world) {
   const bots = [];
   const minDistFromPlayer = 900;
-
-  // Use zone positions (avoid the spawn zone)
   const spawnZones = world.ZONES.filter(z => !z.spawn && !z.water);
 
   for (let i = 0; i < count; i++) {
