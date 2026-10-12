@@ -1,53 +1,35 @@
 // ============================================
-// GAME.JS — Main engine for Karnal Royale
-// v1.1 — fixed duplicate CHAR_PREFIX
+// GAME.JS v2 — PHOTO WALL WORLD
+// Each zone = giant fixed photo panel on grass terrain
+// Connected by roads. Fight around them.
 // ============================================
 
-// NOTE: CHAR_PREFIX is defined in bot.js — do NOT redeclare here.
-
-// --------------------------------------------
-// GLOBALS
-// --------------------------------------------
 let renderer, scene, camera;
-let clock;
-let running = false;
-let container;
-let worldGroup;
+let clock, running = false;
+let container, worldGroup;
 
 const state = {
-  player: null,
-  bots: [],
-  bullets: [],
-  bloodParticles: [],
-  kills: 0,
-  alive: 6,
-  currentZone: null,
-  lastZoneId: null,
-  gameOver: false
+  player: null, bots: [], bullets: [], bloodParticles: [],
+  kills: 0, alive: 6,
+  currentZone: null, lastZoneId: null, gameOver: false
 };
 
-// Sprite texture cache
 const spriteCache = {};
 
-// Controls state
 const controls = {
-  move:  { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 },
-  aim:   { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0, firing: false },
-  keys:  {},
-  jumpPressed: false,
-  reloadPressed: false
+  move: { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 },
+  aim:  { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0, firing: false },
+  keys: {}, jumpPressed: false, reloadPressed: false
 };
 
-// --------------------------------------------
+// ============================================
 // SPRITE LOADER
-// --------------------------------------------
+// ============================================
 function loadSpriteTexture(path) {
   if (spriteCache[path] !== undefined) return spriteCache[path];
   const tex = new THREE.TextureLoader().load(
-    path,
-    undefined,
-    undefined,
-    () => { console.warn('missing sprite:', path); }
+    path, undefined, undefined,
+    () => console.warn('missing sprite:', path)
   );
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.LinearFilter;
@@ -55,17 +37,18 @@ function loadSpriteTexture(path) {
   return tex;
 }
 
-// --------------------------------------------
+// ============================================
 // BOOT
-// --------------------------------------------
+// ============================================
 function boot3D(config) {
-  console.log('[KARNAL] boot3D called with', config);
+  console.log('[KARNAL v2] boot3D', config);
   container = document.getElementById('threeContainer');
   document.getElementById('gameScreen').classList.remove('hidden');
   document.getElementById('lobbyOverlay').classList.add('hidden');
   document.getElementById('introOverlay').classList.add('hidden');
   document.getElementById('endOverlay').classList.add('hidden');
 
+  // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -74,21 +57,24 @@ function boot3D(config) {
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
+  // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x101418);
-  scene.fog = new THREE.Fog(0x101418, 1200, 2200);
+  scene.background = new THREE.Color(0x87a9c9);
+  scene.fog = new THREE.Fog(0x87a9c9, 1500, 3500);
 
-  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 6000);
+  // Camera (45° tilted top-down)
+  camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 1, 6000);
 
-  scene.add(new THREE.AmbientLight(0xa8b8d8, 0.65));
-  scene.add(new THREE.HemisphereLight(0xbdd4ff, 0x2a221a, 0.45));
-  const sun = new THREE.DirectionalLight(0xfff2d8, 0.9);
-  sun.position.set(400, 800, 300);
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.5));
+  const sun = new THREE.DirectionalLight(0xfff2d8, 0.85);
+  sun.position.set(400, 900, 300);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
-  sc.left = -600; sc.right = 600; sc.top = 600; sc.bottom = -600;
-  sc.near = 1; sc.far = 2400;
+  sc.left = -800; sc.right = 800; sc.top = 800; sc.bottom = -800;
+  sc.near = 1; sc.far = 3000;
   sun.name = 'sun';
   scene.add(sun);
   scene.add(sun.target);
@@ -96,10 +82,12 @@ function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
+  // Build world
   buildGround();
   buildRoads();
   buildWater();
-  buildBuildings();
+  buildPhotoPanels();
+  buildCoverObjects();
   buildTrees();
 
   // Player
@@ -123,24 +111,24 @@ function boot3D(config) {
 
   running = true;
   state.gameOver = false;
-  console.log('[KARNAL] game loop starting');
+  console.log('[KARNAL v2] loop starting');
   requestAnimationFrame(loop);
 }
 
-// --------------------------------------------
-// GROUND
-// --------------------------------------------
+// ============================================
+// GROUND — grass texture everywhere
+// ============================================
 function buildGround() {
   const grassTex = window.MAP.imageCache['tile_grass'];
   let mat;
   if (grassTex) {
     const t = grassTex.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(80, 80);
-    t.anisotropy = 4;
+    t.repeat.set(120, 120);
+    t.anisotropy = 8;
     mat = new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
   } else {
-    mat = new THREE.MeshStandardMaterial({ color: 0x2e3d26, roughness: 1 });
+    mat = new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 1 });
   }
   const geo = new THREE.PlaneGeometry(window.MAP.WORLD_W, window.MAP.WORLD_H);
   const ground = new THREE.Mesh(geo, mat);
@@ -150,9 +138,9 @@ function buildGround() {
   worldGroup.add(ground);
 }
 
-// --------------------------------------------
-// ROADS
-// --------------------------------------------
+// ============================================
+// ROADS — thicker, clearer, connect zones
+// ============================================
 function buildRoads() {
   const roadTex = window.MAP.imageCache['tile_road'];
   for (const r of window.MAP.ROADS) {
@@ -160,10 +148,11 @@ function buildRoads() {
     if (roadTex) {
       const t = roadTex.clone();
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(Math.max(1, r.w / 200), Math.max(1, r.d / 200));
-      mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 });
+      t.repeat.set(Math.max(1, r.w/120), Math.max(1, r.d/120));
+      t.anisotropy = 8;
+      mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
     } else {
-      mat = new THREE.MeshStandardMaterial({ color: r.color || 0x2a2a2a });
+      mat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.85 });
     }
     const geo = new THREE.PlaneGeometry(r.w, r.d);
     const m = new THREE.Mesh(geo, mat);
@@ -174,114 +163,213 @@ function buildRoads() {
   }
 }
 
-// --------------------------------------------
+// ============================================
 // WATER
-// --------------------------------------------
+// ============================================
 function buildWater() {
   for (const z of window.MAP.ZONES) {
     if (!z.water) continue;
-    const geo = new THREE.CircleGeometry(z.r, 40);
+    const geo = new THREE.CircleGeometry(z.r, 48);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2b6ea8, transparent: true, opacity: 0.85, roughness: 0.2, metalness: 0.3
+      color: 0x2b6ea8, transparent: true, opacity: 0.88,
+      roughness: 0.15, metalness: 0.4
     });
     const m = new THREE.Mesh(geo, mat);
     m.rotation.x = -Math.PI / 2;
-    m.position.set(z.x, 0.05, z.y);
+    m.position.set(z.x, 0.06, z.y);
     worldGroup.add(m);
   }
 }
 
-// --------------------------------------------
-// BUILDINGS
-// --------------------------------------------
-function buildBuildings() {
-  for (const b of window.MAP.BUILDINGS) {
+// ============================================
+// PHOTO PANELS — THE MAIN ATTRACTION
+// Each zone = giant fixed photo wall (50m tall)
+// ============================================
+function buildPhotoPanels() {
+  for (const z of window.MAP.ZONES) {
+    const photo = window.MAP.imageCache['photo_' + z.id];
+    if (!photo) { console.warn('no photo for', z.id); continue; }
+
     const group = new THREE.Group();
-    group.position.set(b.x, 0, b.y);
+    group.position.set(z.x, 0, z.y);
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: b.color || 0x555555, roughness: 0.85 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), bodyMat);
-    body.position.y = b.h / 2;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    group.add(body);
+    // Panel dimensions — LARGE
+    const PANEL_W = 90;   // 90 meters wide
+    const PANEL_H = 60;   // 60 meters tall
+    const PANEL_T = 2;    // 2 meters thick
 
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(b.w + 4, 4, b.d + 4), roofMat);
-    roof.position.y = b.h + 2;
-    group.add(roof);
+    // Frame (dark metallic box) — slightly bigger than photo
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a, metalness: 0.6, roughness: 0.35
+    });
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(PANEL_W + 4, PANEL_H + 4, PANEL_T),
+      frameMat
+    );
+    frame.position.y = PANEL_H/2;
+    frame.castShadow = true;
+    frame.receiveShadow = true;
+    group.add(frame);
 
-    const photo = window.MAP.imageCache['photo_' + b.id];
-    if (photo) {
-      const tex = new THREE.CanvasTexture(makeLabeledPhotoCanvas(photo));
-      tex.magFilter = THREE.LinearFilter;
-      const photoMat = new THREE.MeshBasicMaterial({ map: tex });
-      const pw = Math.min(b.w * 1.1, 220);
-      const ph = pw * 0.62;
-      const photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), photoMat);
-      photoMesh.position.set(0, b.h + 40 + ph / 2, 0);
-      photoMesh.userData.isBillboard = true;
-      group.add(photoMesh);
-    }
+    // Photo texture — canvas so we can draw custom
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 683;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, 1024, 683);
+    try { ctx.drawImage(photo, 0, 0, 1024, 683); } catch(e) {}
 
-    const labelTex = new THREE.CanvasTexture(makeLabelCanvas(b.id));
-    const labelMat = new THREE.MeshBasicMaterial({ map: labelTex, transparent: true });
-    const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(180, 34), labelMat);
-    labelMesh.position.set(0, b.h + 30, 0);
-    labelMesh.userData.isBillboard = true;
-    group.add(labelMesh);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = 8;
+    tex.magFilter = THREE.LinearFilter;
+
+    // Front face — visible from +Z direction (fixed orientation)
+    const frontMat = new THREE.MeshBasicMaterial({ map: tex });
+    const front = new THREE.Mesh(
+      new THREE.PlaneGeometry(PANEL_W, PANEL_H),
+      frontMat
+    );
+    front.position.set(0, PANEL_H/2, PANEL_T/2 + 0.1);
+    group.add(front);
+
+    // Back face — mirrored
+    const back = new THREE.Mesh(
+      new THREE.PlaneGeometry(PANEL_W, PANEL_H),
+      frontMat
+    );
+    back.position.set(0, PANEL_H/2, -PANEL_T/2 - 0.1);
+    back.rotation.y = Math.PI;
+    group.add(back);
+
+    // Glowing border ring around front
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffc8, transparent: true, opacity: 0.85
+    });
+    const bw = PANEL_W + 6;
+    const bh = PANEL_H + 6;
+    // top
+    const gTop = new THREE.Mesh(new THREE.PlaneGeometry(bw, 0.8), glowMat);
+    gTop.position.set(0, PANEL_H + 2.6, PANEL_T/2 + 0.2);
+    group.add(gTop);
+    // bottom
+    const gBot = new THREE.Mesh(new THREE.PlaneGeometry(bw, 0.8), glowMat);
+    gBot.position.set(0, -2.6 + 3, PANEL_T/2 + 0.2);
+    group.add(gBot);
+    // left
+    const gL = new THREE.Mesh(new THREE.PlaneGeometry(0.8, bh), glowMat);
+    gL.position.set(-bw/2, PANEL_H/2, PANEL_T/2 + 0.2);
+    group.add(gL);
+    // right
+    const gR = new THREE.Mesh(new THREE.PlaneGeometry(0.8, bh), glowMat);
+    gR.position.set(bw/2, PANEL_H/2, PANEL_T/2 + 0.2);
+    group.add(gR);
+
+    // Zone name banner above panel
+    const nameCanvas = document.createElement('canvas');
+    nameCanvas.width = 1024; nameCanvas.height = 128;
+    const nctx = nameCanvas.getContext('2d');
+    nctx.fillStyle = 'rgba(0,0,0,0.85)';
+    nctx.fillRect(0, 0, 1024, 128);
+    nctx.strokeStyle = '#00ffc8';
+    nctx.lineWidth = 6;
+    nctx.strokeRect(4, 4, 1016, 120);
+    nctx.fillStyle = '#00ffc8';
+    nctx.font = 'bold 76px Arial';
+    nctx.textAlign = 'center';
+    nctx.textBaseline = 'middle';
+    nctx.fillText(z.name, 512, 68);
+    const nameTex = new THREE.CanvasTexture(nameCanvas);
+    const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true });
+    const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W + 20, 22), nameMat);
+    nameMesh.position.set(0, PANEL_H + 16, PANEL_T/2 + 0.3);
+    group.add(nameMesh);
+
+    // Base concrete slab
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 });
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(PANEL_W + 20, 1, PANEL_T + 16),
+      slabMat
+    );
+    slab.position.y = 0.5;
+    slab.receiveShadow = true;
+    group.add(slab);
+
+    // Register collision
+    z._collision = {
+      x: z.x, y: z.y,
+      hw: (PANEL_W + 6)/2,
+      hh: (PANEL_T + 4)/2
+    };
 
     worldGroup.add(group);
   }
 }
 
-function makeLabeledPhotoCanvas(img) {
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 320;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#111';
-  ctx.fillRect(0, 0, 512, 320);
-  try { ctx.drawImage(img, 0, 0, 512, 288); } catch(e) {}
-  ctx.fillStyle = 'rgba(0,0,0,0.85)';
-  ctx.fillRect(0, 288, 512, 32);
-  ctx.strokeStyle = '#00ffc8';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, 512, 320);
-  return c;
+// ============================================
+// COVER OBJECTS — rocks, crates, barrels
+// ============================================
+function buildCoverObjects() {
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 1 });
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x6a4a22, roughness: 0.9 });
+  const barrelMat = new THREE.MeshStandardMaterial({ color: 0x8a3a2a, roughness: 0.7, metalness: 0.2 });
+
+  const zones = window.MAP.ZONES;
+
+  for (let i = 0; i < 60; i++) {
+    const z = zones[i % zones.length];
+    const x = z.x + (Math.random() - 0.5) * 700;
+    const y = z.y + (Math.random() - 0.5) * 700;
+    if (x < 100 || x > window.MAP.WORLD_W - 100) continue;
+    if (y < 100 || y > window.MAP.WORLD_H - 100) continue;
+    // skip if inside a photo panel
+    if (z._collision && Math.abs(x - z._collision.x) < z._collision.hw + 40
+        && Math.abs(y - z._collision.y) < z._collision.hh + 40) continue;
+
+    const roll = Math.random();
+    let mesh;
+    if (roll < 0.4) {
+      // rock
+      const s = 8 + Math.random() * 12;
+      mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
+      mesh.position.set(x, s * 0.6, y);
+      mesh.rotation.y = Math.random() * Math.PI * 2;
+    } else if (roll < 0.7) {
+      // crate
+      const s = 10 + Math.random() * 6;
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), crateMat);
+      mesh.position.set(x, s/2, y);
+      mesh.rotation.y = Math.random() * Math.PI * 2;
+    } else {
+      // barrel
+      const s = 8;
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(s/2, s/2, s*1.4, 12), barrelMat);
+      mesh.position.set(x, s*0.7, y);
+    }
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    worldGroup.add(mesh);
+  }
 }
 
-function makeLabelCanvas(id) {
-  const zone = window.MAP.ZONES.find(z => z.id === id);
-  const name = zone ? zone.name : id.toUpperCase();
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 96;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,0.75)';
-  ctx.fillRect(0, 0, 512, 96);
-  ctx.strokeStyle = '#00ffc8';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, 508, 92);
-  ctx.fillStyle = '#00ffc8';
-  ctx.font = 'bold 54px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(name, 256, 50);
-  return c;
-}
-
-// --------------------------------------------
-// TREES
-// --------------------------------------------
+// ============================================
+// TREES — only in park zones
+// ============================================
 function buildTrees() {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 1 });
   const leafMat  = new THREE.MeshStandardMaterial({ color: 0x2e6a2e, roughness: 1 });
-  const treeZones = window.MAP.ZONES.filter(z => !z.water);
-  for (let i = 0; i < 70; i++) {
-    const z = treeZones[i % treeZones.length];
-    const x = z.x + (Math.random() - 0.5) * 700;
-    const y = z.y + (Math.random() - 0.5) * 700;
-    if (x < 60 || x > window.MAP.WORLD_W - 60) continue;
-    if (y < 60 || y > window.MAP.WORLD_H - 60) continue;
+  const parkZones = window.MAP.ZONES.filter(z =>
+    ['atal_park','ndri','mall','karan_lake'].includes(z.id)
+  );
+
+  for (let i = 0; i < 40; i++) {
+    const z = parkZones[i % parkZones.length];
+    const x = z.x + (Math.random() - 0.5) * 600;
+    const y = z.y + (Math.random() - 0.5) * 600;
+    if (x < 80 || x > window.MAP.WORLD_W - 80) continue;
+    if (y < 80 || y > window.MAP.WORLD_H - 80) continue;
+    if (z._collision && Math.abs(x - z._collision.x) < z._collision.hw + 60
+        && Math.abs(y - z._collision.y) < z._collision.hh + 60) continue;
+
     const g = new THREE.Group();
     g.position.set(x, 0, y);
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(4, 6, 30, 6), trunkMat);
@@ -294,9 +382,9 @@ function buildTrees() {
   }
 }
 
-// --------------------------------------------
+// ============================================
 // PLAYER
-// --------------------------------------------
+// ============================================
 function createPlayer(config, spawn) {
   const prefix = window.BOT.CHAR_PREFIX[config.character.folder] || 'manBlue';
   const folder = config.character.folder;
@@ -326,14 +414,13 @@ function createPlayer(config, spawn) {
     ammo: 30, maxAmmo: 30,
     reloadTimer: 0, reloadDuration: 1.8,
     shootCooldown: 0, fireRate: 0.12,
-    walkFrame: 0, hitFlash: 0,
-    config
+    walkFrame: 0, hitFlash: 0, config
   };
 }
 
-// --------------------------------------------
+// ============================================
 // BOT MESH
-// --------------------------------------------
+// ============================================
 function buildBotMesh(bot) {
   const mat = new THREE.SpriteMaterial({
     map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'),
@@ -354,9 +441,31 @@ function buildBotMesh(bot) {
   bot.shadow = shadow;
 }
 
-// --------------------------------------------
+// ============================================
+// COLLISION — block player from walking through panels
+// ============================================
+function resolveCollisions(entity) {
+  for (const z of window.MAP.ZONES) {
+    if (!z._collision) continue;
+    const c = z._collision;
+    const dx = entity.x - c.x;
+    const dy = entity.y - c.y;
+    if (Math.abs(dx) < c.hw + entity.radius && Math.abs(dy) < c.hh + entity.radius) {
+      // push out along smallest axis
+      const overlapX = (c.hw + entity.radius) - Math.abs(dx);
+      const overlapY = (c.hh + entity.radius) - Math.abs(dy);
+      if (overlapX < overlapY) {
+        entity.x = c.x + Math.sign(dx || 1) * (c.hw + entity.radius);
+      } else {
+        entity.y = c.y + Math.sign(dy || 1) * (c.hh + entity.radius);
+      }
+    }
+  }
+}
+
+// ============================================
 // CONTROLS
-// --------------------------------------------
+// ============================================
 function setupControls() {
   bindJoystick(document.getElementById('joyBase'), document.getElementById('joyStick'), controls.move, false);
   bindJoystick(document.getElementById('aimBase'), document.getElementById('aimStick'), controls.aim,  true);
@@ -384,14 +493,13 @@ function bindJoystick(baseEl, stickEl, ref, isAim) {
   if (!baseEl || !stickEl) return;
   const maxR = 55;
   const rect = () => baseEl.getBoundingClientRect();
-
   const start = e => {
     const t = e.touches ? e.touches[0] : e;
     const r = rect();
     ref.active = true;
     ref.id = t.identifier ?? 'mouse';
-    ref.baseX = r.left + r.width / 2;
-    ref.baseY = r.top + r.height / 2;
+    ref.baseX = r.left + r.width/2;
+    ref.baseY = r.top + r.height/2;
     if (isAim) ref.firing = true;
     move(e);
   };
@@ -423,9 +531,9 @@ function bindJoystick(baseEl, stickEl, ref, isAim) {
   window.addEventListener('mouseup', end);
 }
 
-// --------------------------------------------
+// ============================================
 // BULLETS
-// --------------------------------------------
+// ============================================
 function spawnBullet(x, y, angle, owner, ownerId, damage) {
   const speed = 1400;
   const geo = new THREE.SphereGeometry(4, 6, 6);
@@ -450,14 +558,28 @@ function updateBullets(dt) {
     b.mesh.position.set(b.x, 50, b.y);
     let hit = false;
 
+    // Wall collision
+    for (const z of window.MAP.ZONES) {
+      if (!z._collision) continue;
+      const c = z._collision;
+      if (Math.abs(b.x - c.x) < c.hw && Math.abs(b.y - c.y) < c.hh) {
+        hit = true; break;
+      }
+    }
+    if (hit) {
+      worldGroup.remove(b.mesh);
+      b.mesh.geometry.dispose(); b.mesh.material.dispose();
+      state.bullets.splice(i, 1);
+      continue;
+    }
+
     if (b.owner === 'player') {
       for (const bot of state.bots) {
         if (!bot.alive) continue;
         if (Math.hypot(bot.x - b.x, bot.y - b.y) < bot.radius + 6) {
           bot.takeDamage(b.damage, 'player');
           spawnBlood(b.x, b.y);
-          hit = true;
-          break;
+          hit = true; break;
         }
       }
     } else {
@@ -471,16 +593,15 @@ function updateBullets(dt) {
 
     if (hit || b.life <= 0) {
       worldGroup.remove(b.mesh);
-      b.mesh.geometry.dispose();
-      b.mesh.material.dispose();
+      b.mesh.geometry.dispose(); b.mesh.material.dispose();
       state.bullets.splice(i, 1);
     }
   }
 }
 
-// --------------------------------------------
+// ============================================
 // BLOOD
-// --------------------------------------------
+// ============================================
 function spawnBlood(x, y) {
   for (let i = 0; i < 8; i++) {
     const geo = new THREE.SphereGeometry(3, 4, 4);
@@ -490,7 +611,7 @@ function spawnBlood(x, y) {
     worldGroup.add(m);
     const a = Math.random() * Math.PI * 2;
     const sp = 200 + Math.random() * 200;
-    state.bloodParticles.push({ mesh: m, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.5 });
+    state.bloodParticles.push({ mesh: m, x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 0.5 });
   }
 }
 
@@ -505,25 +626,21 @@ function updateBlood(dt) {
     p.mesh.material.transparent = true;
     if (p.life <= 0) {
       worldGroup.remove(p.mesh);
-      p.mesh.geometry.dispose();
-      p.mesh.material.dispose();
+      p.mesh.geometry.dispose(); p.mesh.material.dispose();
       state.bloodParticles.splice(i, 1);
     }
   }
 }
 
-// --------------------------------------------
+// ============================================
 // DAMAGE
-// --------------------------------------------
+// ============================================
 function damagePlayer(amount) {
   if (state.gameOver) return;
   state.player.hp -= amount;
   state.player.hitFlash = 0.15;
   updateHPBar();
-  if (state.player.hp <= 0) {
-    state.player.hp = 0;
-    endGame(false);
-  }
+  if (state.player.hp <= 0) { state.player.hp = 0; endGame(false); }
 }
 
 function updateHPBar() {
@@ -539,21 +656,16 @@ function updateHPBar() {
   if (txt) txt.textContent = Math.round(hp);
 }
 
-// --------------------------------------------
+// ============================================
 // EVENTS
-// --------------------------------------------
+// ============================================
 function onBotKilled(bot, fromId) {
   if (bot.mesh) worldGroup.remove(bot.mesh);
   if (bot.shadow) worldGroup.remove(bot.shadow);
   state.alive--;
-  if (fromId === 'player') {
-    state.kills++;
-    addKillFeed('YOU ☠ ' + bot.name);
-  } else {
-    addKillFeed(bot.name + ' ☠');
-  }
-  updateAliveHUD();
-  updateKillsHUD();
+  if (fromId === 'player') { state.kills++; addKillFeed('YOU ☠ ' + bot.name); }
+  else addKillFeed(bot.name + ' ☠');
+  updateAliveHUD(); updateKillsHUD();
   spawnBlood(bot.x, bot.y);
   if (state.alive <= 1 && !state.gameOver) endGame(true);
 }
@@ -577,9 +689,9 @@ function addKillFeed(text) {
   setTimeout(() => div.remove(), 3200);
 }
 
-// --------------------------------------------
+// ============================================
 // PLAYER UPDATE
-// --------------------------------------------
+// ============================================
 function updatePlayer(dt) {
   const p = state.player;
   if (p.hp <= 0) return;
@@ -609,6 +721,7 @@ function updatePlayer(dt) {
 
   p.x += ix * speed * dt;
   p.y += iy * speed * dt;
+  resolveCollisions(p);
   p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x));
   p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
 
@@ -661,9 +774,9 @@ function updateAmmoHUD() {
   if (el) el.textContent = state.player.ammo;
 }
 
-// --------------------------------------------
+// ============================================
 // ZONE POPUP
-// --------------------------------------------
+// ============================================
 function showZonePopup(name) {
   let el = document.getElementById('zonePopup');
   if (!el) {
@@ -682,46 +795,35 @@ function updateZoneHUD() {
   const el = document.getElementById('zoneName');
   if (!el) return;
   const z = state.currentZone;
-  if (z && z.id !== state.lastZoneId) {
-    state.lastZoneId = z.id;
-    showZonePopup(z.name);
-  }
+  if (z && z.id !== state.lastZoneId) { state.lastZoneId = z.id; showZonePopup(z.name); }
   el.textContent = z ? z.name : 'KARNAL';
 }
 
-// --------------------------------------------
+// ============================================
 // CAMERA
-// --------------------------------------------
+// ============================================
 function updateCamera(dt) {
   const p = state.player;
-  const camHeight = 260;
-  const camDist   = 260;
+  const camHeight = 320;
+  const camDist   = 320;
   const tx = p.x;
   const tz = p.y + camDist;
   camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7);
   camera.position.y  = camHeight;
   camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7);
-  camera.lookAt(p.x, 20, p.y);
+  camera.lookAt(p.x, 30, p.y);
 
   const sun = scene.getObjectByName('sun');
   if (sun) {
-    sun.position.set(p.x + 400, 800, p.y + 300);
+    sun.position.set(p.x + 400, 900, p.y + 300);
     sun.target.position.set(p.x, 0, p.y);
     sun.target.updateMatrixWorld();
   }
 }
 
-function updateBillboards() {
-  worldGroup.traverse(o => {
-    if (o.userData && o.userData.isBillboard) {
-      o.lookAt(camera.position.x, o.position.y, camera.position.z);
-    }
-  });
-}
-
-// --------------------------------------------
+// ============================================
 // END GAME
-// --------------------------------------------
+// ============================================
 function endGame(win) {
   if (state.gameOver) return;
   state.gameOver = true;
@@ -730,28 +832,24 @@ function endGame(win) {
   const t  = document.getElementById('endTitle');
   const s  = document.getElementById('endSub');
   if (ov) ov.classList.remove('hidden');
-  if (t) {
-    t.textContent = win ? 'VICTORY' : 'DEFEATED';
-    t.classList.toggle('dead', !win);
-  }
+  if (t) { t.textContent = win ? 'VICTORY' : 'DEFEATED'; t.classList.toggle('dead', !win); }
   if (s) s.textContent = win
     ? 'Winner winner chicken dinner · ' + state.kills + ' kills'
     : 'You were eliminated · ' + state.kills + ' kills';
 }
 
-// --------------------------------------------
+// ============================================
 // MAIN LOOP
-// --------------------------------------------
+// ============================================
 function loop() {
   if (!running) return;
   const dt = Math.min(clock.getDelta(), 0.05);
 
   if (!state.gameOver) {
     updatePlayer(dt);
-    for (const b of state.bots) b.update(dt, state.player, window.MAP);
+    for (const b of state.bots) { b.update(dt, state.player, window.MAP); resolveCollisions(b); }
     updateBullets(dt);
     updateBlood(dt);
-    updateBillboards();
     updateZoneHUD();
   }
   updateCamera(dt);
