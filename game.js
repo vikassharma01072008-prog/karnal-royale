@@ -1,7 +1,9 @@
 // ============================================
 // GAME.JS — Main engine for Karnal Royale
-// Top-down 3D camera + player + bullets + bots + HUD
+// v1.1 — fixed duplicate CHAR_PREFIX
 // ============================================
+
+// NOTE: CHAR_PREFIX is defined in bot.js — do NOT redeclare here.
 
 // --------------------------------------------
 // GLOBALS
@@ -18,21 +20,10 @@ const state = {
   bullets: [],
   bloodParticles: [],
   kills: 0,
-  alive: 6, // player + 5 bots in v1
+  alive: 6,
   currentZone: null,
   lastZoneId: null,
   gameOver: false
-};
-
-// Character sprite prefix map
-const CHAR_PREFIX = {
-  'Hitman1':    'hitman1',
-  'manblue':    'manBlue',
-  'Manbrown':   'manbrown',
-  'Robot1':     'robot1',
-  'soldier1':   'soldier1',
-  'Survivor1':  'survivor1',
-  'WomanGreen': 'womanGreen'
 };
 
 // Sprite texture cache
@@ -65,16 +56,16 @@ function loadSpriteTexture(path) {
 }
 
 // --------------------------------------------
-// BOOT — called by lobby
+// BOOT
 // --------------------------------------------
 function boot3D(config) {
+  console.log('[KARNAL] boot3D called with', config);
   container = document.getElementById('threeContainer');
   document.getElementById('gameScreen').classList.remove('hidden');
   document.getElementById('lobbyOverlay').classList.add('hidden');
   document.getElementById('introOverlay').classList.add('hidden');
   document.getElementById('endOverlay').classList.add('hidden');
 
-  // --- Renderer ---
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -83,18 +74,14 @@ function boot3D(config) {
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
-  // --- Scene ---
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x101418);
   scene.fog = new THREE.Fog(0x101418, 1200, 2200);
 
-  // --- Camera (top-down tilted 45°) ---
   camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 6000);
 
-  // --- Lights ---
   scene.add(new THREE.AmbientLight(0xa8b8d8, 0.65));
-  const hemi = new THREE.HemisphereLight(0xbdd4ff, 0x2a221a, 0.45);
-  scene.add(hemi);
+  scene.add(new THREE.HemisphereLight(0xbdd4ff, 0x2a221a, 0.45));
   const sun = new THREE.DirectionalLight(0xfff2d8, 0.9);
   sun.position.set(400, 800, 300);
   sun.castShadow = true;
@@ -102,10 +89,10 @@ function boot3D(config) {
   const sc = sun.shadow.camera;
   sc.left = -600; sc.right = 600; sc.top = 600; sc.bottom = -600;
   sc.near = 1; sc.far = 2400;
+  sun.name = 'sun';
   scene.add(sun);
   scene.add(sun.target);
 
-  // --- World ---
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
@@ -115,39 +102,33 @@ function boot3D(config) {
   buildBuildings();
   buildTrees();
 
-  // --- Player ---
+  // Player
   state.player = createPlayer(config, window.MAP.getSpawnPoint());
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
-  // --- Bots (5 in v1) ---
+  // Bots
   state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
   for (const b of state.bots) {
     buildBotMesh(b);
     worldGroup.add(b.mesh);
     worldGroup.add(b.shadow);
   }
+  state.alive = state.bots.length + 1;
   updateAliveHUD();
 
-  // --- Clock ---
   clock = new THREE.Clock();
-
-  // --- Controls ---
   setupControls();
-
-  // --- Resize ---
   window.addEventListener('resize', onResize);
-
-  // --- Background music loop (walking sound low) ---
-  // (skipping: walking.mp3 is used as event, not loop)
 
   running = true;
   state.gameOver = false;
+  console.log('[KARNAL] game loop starting');
   requestAnimationFrame(loop);
 }
 
 // --------------------------------------------
-// GROUND — big plane with grass texture
+// GROUND
 // --------------------------------------------
 function buildGround() {
   const grassTex = window.MAP.imageCache['tile_grass'];
@@ -194,18 +175,14 @@ function buildRoads() {
 }
 
 // --------------------------------------------
-// WATER — cyan planes
+// WATER
 // --------------------------------------------
 function buildWater() {
   for (const z of window.MAP.ZONES) {
     if (!z.water) continue;
     const geo = new THREE.CircleGeometry(z.r, 40);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2b6ea8,
-      transparent: true,
-      opacity: 0.85,
-      roughness: 0.2,
-      metalness: 0.3
+      color: 0x2b6ea8, transparent: true, opacity: 0.85, roughness: 0.2, metalness: 0.3
     });
     const m = new THREE.Mesh(geo, mat);
     m.rotation.x = -Math.PI / 2;
@@ -215,15 +192,13 @@ function buildWater() {
 }
 
 // --------------------------------------------
-// BUILDINGS — box + zone photo billboard on top
+// BUILDINGS
 // --------------------------------------------
 function buildBuildings() {
   for (const b of window.MAP.BUILDINGS) {
     const group = new THREE.Group();
     group.position.set(b.x, 0, b.y);
-    group.rotation.y = b.rot || 0;
 
-    // Body
     const bodyMat = new THREE.MeshStandardMaterial({ color: b.color || 0x555555, roughness: 0.85 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), bodyMat);
     body.position.y = b.h / 2;
@@ -231,28 +206,24 @@ function buildBuildings() {
     body.receiveShadow = true;
     group.add(body);
 
-    // Roof line
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
     const roof = new THREE.Mesh(new THREE.BoxGeometry(b.w + 4, 4, b.d + 4), roofMat);
     roof.position.y = b.h + 2;
     group.add(roof);
 
-    // Zone photo — as a large billboard standing on top of the building
     const photo = window.MAP.imageCache['photo_' + b.id];
     if (photo) {
-      const tex = new THREE.CanvasTexture(makeLabeledPhotoCanvas(photo, b.id));
+      const tex = new THREE.CanvasTexture(makeLabeledPhotoCanvas(photo));
       tex.magFilter = THREE.LinearFilter;
-      const photoMat = new THREE.MeshBasicMaterial({ map: tex, transparent: false });
+      const photoMat = new THREE.MeshBasicMaterial({ map: tex });
       const pw = Math.min(b.w * 1.1, 220);
       const ph = pw * 0.62;
       const photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), photoMat);
       photoMesh.position.set(0, b.h + 40 + ph / 2, 0);
-      // Billboard always faces camera — we update in loop
       photoMesh.userData.isBillboard = true;
       group.add(photoMesh);
     }
 
-    // Name label under photo
     const labelTex = new THREE.CanvasTexture(makeLabelCanvas(b.id));
     const labelMat = new THREE.MeshBasicMaterial({ map: labelTex, transparent: true });
     const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(180, 34), labelMat);
@@ -264,17 +235,13 @@ function buildBuildings() {
   }
 }
 
-// Draw a canvas with the zone photo + name label
-function makeLabeledPhotoCanvas(img, id) {
+function makeLabeledPhotoCanvas(img) {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 320;
   const ctx = c.getContext('2d');
-  // background
   ctx.fillStyle = '#111';
   ctx.fillRect(0, 0, 512, 320);
-  // image
   try { ctx.drawImage(img, 0, 0, 512, 288); } catch(e) {}
-  // bottom bar
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 288, 512, 32);
   ctx.strokeStyle = '#00ffc8';
@@ -283,7 +250,6 @@ function makeLabeledPhotoCanvas(img, id) {
   return c;
 }
 
-// Draw only the name text (transparent bg)
 function makeLabelCanvas(id) {
   const zone = window.MAP.ZONES.find(z => z.id === id);
   const name = zone ? zone.name : id.toUpperCase();
@@ -304,12 +270,11 @@ function makeLabelCanvas(id) {
 }
 
 // --------------------------------------------
-// TREES — scattered across map for cover
+// TREES
 // --------------------------------------------
 function buildTrees() {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 1 });
   const leafMat  = new THREE.MeshStandardMaterial({ color: 0x2e6a2e, roughness: 1 });
-
   const treeZones = window.MAP.ZONES.filter(z => !z.water);
   for (let i = 0; i < 70; i++) {
     const z = treeZones[i % treeZones.length];
@@ -317,20 +282,14 @@ function buildTrees() {
     const y = z.y + (Math.random() - 0.5) * 700;
     if (x < 60 || x > window.MAP.WORLD_W - 60) continue;
     if (y < 60 || y > window.MAP.WORLD_H - 60) continue;
-
     const g = new THREE.Group();
     g.position.set(x, 0, y);
-
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(4, 6, 30, 6), trunkMat);
-    trunk.position.y = 15;
-    trunk.castShadow = true;
+    trunk.position.y = 15; trunk.castShadow = true;
     g.add(trunk);
-
     const leaves = new THREE.Mesh(new THREE.SphereGeometry(22, 8, 6), leafMat);
-    leaves.position.y = 42;
-    leaves.castShadow = true;
+    leaves.position.y = 42; leaves.castShadow = true;
     g.add(leaves);
-
     worldGroup.add(g);
   }
 }
@@ -339,13 +298,12 @@ function buildTrees() {
 // PLAYER
 // --------------------------------------------
 function createPlayer(config, spawn) {
-  const prefix = CHAR_PREFIX[config.character.folder] || 'manBlue';
+  const prefix = window.BOT.CHAR_PREFIX[config.character.folder] || 'manBlue';
   const folder = config.character.folder;
 
   const mat = new THREE.SpriteMaterial({
     map: loadSpriteTexture('assets/' + folder + '/' + prefix + '_stand.png'),
-    transparent: true,
-    depthTest: false
+    transparent: true, depthTest: false
   });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(90, 90, 1);
@@ -355,28 +313,20 @@ function createPlayer(config, spawn) {
   mesh.add(sprite);
   mesh.position.set(spawn.x, 50, spawn.y);
 
-  // Shadow blob
   const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 });
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(26, 20), shadowMat);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.set(spawn.x, 0.6, spawn.y);
 
   return {
-    x: spawn.x, y: spawn.y,
-    angle: 0,
-    hp: 100, maxHp: 100,
-    radius: 22,
-    speed: 320,
+    x: spawn.x, y: spawn.y, angle: 0,
+    hp: 100, maxHp: 100, radius: 22, speed: 320,
     mesh, shadow, sprite,
-    charFolder: folder,
-    prefix,
+    charFolder: folder, prefix,
     ammo: 30, maxAmmo: 30,
-    reloadTimer: 0,
-    reloadDuration: 1.8,
-    shootCooldown: 0,
-    fireRate: 0.12,
-    walkFrame: 0,
-    hitFlash: 0,
+    reloadTimer: 0, reloadDuration: 1.8,
+    shootCooldown: 0, fireRate: 0.12,
+    walkFrame: 0, hitFlash: 0,
     config
   };
 }
@@ -387,8 +337,7 @@ function createPlayer(config, spawn) {
 function buildBotMesh(bot) {
   const mat = new THREE.SpriteMaterial({
     map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'),
-    transparent: true,
-    depthTest: false
+    transparent: true, depthTest: false
   });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(90, 90, 1);
@@ -412,7 +361,6 @@ function setupControls() {
   bindJoystick(document.getElementById('joyBase'), document.getElementById('joyStick'), controls.move, false);
   bindJoystick(document.getElementById('aimBase'), document.getElementById('aimStick'), controls.aim,  true);
 
-  // buttons
   const btnJump = document.getElementById('btnJump');
   if (btnJump) {
     btnJump.addEventListener('touchstart', e => { e.preventDefault(); controls.jumpPressed = true; }, { passive: false });
@@ -424,7 +372,6 @@ function setupControls() {
     btnReload.addEventListener('mousedown', () => controls.reloadPressed = true);
   }
 
-  // keyboard
   window.addEventListener('keydown', e => {
     controls.keys[e.key.toLowerCase()] = true;
     if (e.key === ' ') controls.jumpPressed = true;
@@ -486,14 +433,11 @@ function spawnBullet(x, y, angle, owner, ownerId, damage) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(x, 50, y);
   worldGroup.add(mesh);
-
   state.bullets.push({
     x, y,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
-    life: 1.2,
-    owner, ownerId, damage,
-    mesh
+    life: 1.2, owner, ownerId, damage, mesh
   });
 }
 
@@ -504,10 +448,8 @@ function updateBullets(dt) {
     b.y += b.vy * dt;
     b.life -= dt;
     b.mesh.position.set(b.x, 50, b.y);
-
     let hit = false;
 
-    // vs bots
     if (b.owner === 'player') {
       for (const bot of state.bots) {
         if (!bot.alive) continue;
@@ -519,7 +461,6 @@ function updateBullets(dt) {
         }
       }
     } else {
-      // bot bullet vs player
       const p = state.player;
       if (p.hp > 0 && Math.hypot(p.x - b.x, p.y - b.y) < p.radius + 6) {
         damagePlayer(b.damage);
@@ -538,7 +479,7 @@ function updateBullets(dt) {
 }
 
 // --------------------------------------------
-// BLOOD PARTICLES
+// BLOOD
 // --------------------------------------------
 function spawnBlood(x, y) {
   for (let i = 0; i < 8; i++) {
@@ -549,23 +490,15 @@ function spawnBlood(x, y) {
     worldGroup.add(m);
     const a = Math.random() * Math.PI * 2;
     const sp = 200 + Math.random() * 200;
-    state.bloodParticles.push({
-      mesh: m,
-      x, y,
-      vx: Math.cos(a) * sp,
-      vy: Math.sin(a) * sp,
-      life: 0.5
-    });
+    state.bloodParticles.push({ mesh: m, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.5 });
   }
 }
 
 function updateBlood(dt) {
   for (let i = state.bloodParticles.length - 1; i >= 0; i--) {
     const p = state.bloodParticles[i];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vx *= 0.92;
-    p.vy *= 0.92;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.92; p.vy *= 0.92;
     p.life -= dt;
     p.mesh.position.set(p.x, 50, p.y);
     p.mesh.material.opacity = Math.max(0, p.life * 2);
@@ -607,10 +540,9 @@ function updateHPBar() {
 }
 
 // --------------------------------------------
-// EVENTS FROM BOTS
+// EVENTS
 // --------------------------------------------
 function onBotKilled(bot, fromId) {
-  // remove mesh
   if (bot.mesh) worldGroup.remove(bot.mesh);
   if (bot.shadow) worldGroup.remove(bot.shadow);
   state.alive--;
@@ -652,20 +584,15 @@ function updatePlayer(dt) {
   const p = state.player;
   if (p.hp <= 0) return;
 
-  // reload
   if (p.reloadTimer > 0) {
     p.reloadTimer -= dt;
-    if (p.reloadTimer <= 0) {
-      p.ammo = p.maxAmmo;
-      updateAmmoHUD();
-    }
+    if (p.reloadTimer <= 0) { p.ammo = p.maxAmmo; updateAmmoHUD(); }
   }
   if (controls.reloadPressed && p.ammo < p.maxAmmo && p.reloadTimer <= 0) {
     p.reloadTimer = p.reloadDuration;
   }
   controls.reloadPressed = false;
 
-  // move
   let ix = 0, iy = 0;
   if (controls.keys['w'] || controls.keys['arrowup'])    iy -= 1;
   if (controls.keys['s'] || controls.keys['arrowdown'])  iy += 1;
@@ -685,20 +612,14 @@ function updatePlayer(dt) {
   p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x));
   p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
 
-  // walk anim
   if (mag > 0.1) p.walkFrame += dt * 8;
-  if (mag > 0.1 && !p._lastWalkSound) {
-    p._lastWalkSound = performance.now();
-  }
 
-  // aim (right joystick)
   if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) {
     p.angle = Math.atan2(controls.aim.dy, controls.aim.dx);
   } else if (mag > 0.1) {
     p.angle = Math.atan2(iy, ix);
   }
 
-  // shoot
   if (p.shootCooldown > 0) p.shootCooldown -= dt;
   if ((controls.aim.firing || controls.keys[' ']) && p.shootCooldown <= 0 && p.ammo > 0 && p.reloadTimer <= 0) {
     const bx = p.x + Math.cos(p.angle) * 40;
@@ -711,14 +632,11 @@ function updatePlayer(dt) {
     if (p.ammo === 0) p.reloadTimer = p.reloadDuration;
   }
 
-  // hit flash
   if (p.hitFlash > 0) p.hitFlash -= dt;
 
-  // Update mesh
   p.mesh.position.set(p.x, 50, p.y);
   p.shadow.position.set(p.x, 0.6, p.y);
 
-  // sprite
   const spriteName = getPlayerSpriteName(p);
   const newTex = loadSpriteTexture('assets/' + p.charFolder + '/' + spriteName);
   if (p.sprite.material.map !== newTex) {
@@ -732,7 +650,6 @@ function getPlayerSpriteName(p) {
   if (p.reloadTimer > 0) return pre + '_reload.png';
   if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) return pre + '_machine.png';
   if (controls.aim.firing || controls.keys[' ']) return pre + '_machine.png';
-  // walking?
   const ix = controls.move.dx || (controls.keys['d'] ? 1 : (controls.keys['a'] ? -1 : 0));
   const iy = controls.move.dy || (controls.keys['s'] ? 1 : (controls.keys['w'] ? -1 : 0));
   if (Math.hypot(ix, iy) > 0.1) return pre + '_hold.png';
@@ -761,9 +678,6 @@ function showZonePopup(name) {
   el._t = setTimeout(() => el.classList.remove('show'), 2000);
 }
 
-// --------------------------------------------
-// HUD ZONE NAME
-// --------------------------------------------
 function updateZoneHUD() {
   const el = document.getElementById('zoneName');
   if (!el) return;
@@ -776,7 +690,7 @@ function updateZoneHUD() {
 }
 
 // --------------------------------------------
-// CAMERA — top-down tilted
+// CAMERA
 // --------------------------------------------
 function updateCamera(dt) {
   const p = state.player;
@@ -789,8 +703,7 @@ function updateCamera(dt) {
   camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7);
   camera.lookAt(p.x, 20, p.y);
 
-  // sun follow player (shadow coverage)
-  const sun = scene.children.find(o => o.isDirectionalLight && o.castShadow);
+  const sun = scene.getObjectByName('sun');
   if (sun) {
     sun.position.set(p.x + 400, 800, p.y + 300);
     sun.target.position.set(p.x, 0, p.y);
@@ -798,9 +711,6 @@ function updateCamera(dt) {
   }
 }
 
-// --------------------------------------------
-// BILLBOARDS face camera
-// --------------------------------------------
 function updateBillboards() {
   worldGroup.traverse(o => {
     if (o.userData && o.userData.isBillboard) {
@@ -846,7 +756,6 @@ function loop() {
   }
   updateCamera(dt);
 
-  // sync bot meshes
   for (const b of state.bots) {
     if (!b.mesh || !b.alive) continue;
     b.mesh.position.set(b.x, 50, b.y);
@@ -858,7 +767,6 @@ function loop() {
     }
   }
 
-  // minimap
   if (window.MINIMAP) window.MINIMAP.drawMinimap(state.player, state.bots, state.currentZone);
 
   renderer.render(scene, camera);
@@ -872,22 +780,10 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// --------------------------------------------
-// END BUTTON → back to lobby
-// --------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('endBtn');
-  if (btn) {
-    btn.addEventListener('click', () => location.reload());
-  }
+  if (btn) btn.addEventListener('click', () => location.reload());
 });
 
-// --------------------------------------------
-// EXPORT
-// --------------------------------------------
-window.GAME = {
-  boot3D,
-  spawnBullet,
-  onBotKilled
-};
+window.GAME = { boot3D, spawnBullet, onBotKilled };
 window.boot3D = boot3D;
