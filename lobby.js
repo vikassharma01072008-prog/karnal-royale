@@ -1,6 +1,5 @@
 // ============================================
-// LOBBY.JS — character select, mode select, start
-// Passes config to boot3D()
+// LOBBY.JS — With Explore Mode
 // ============================================
 
 const CHARACTERS = [
@@ -14,16 +13,14 @@ const CHARACTERS = [
 ];
 
 let selectedChar = CHARACTERS[0];
-let selectedMode = 'bots';
+let selectedMode = 'explore'; // Default to explore now
 
-// --------------------------------------------
 function initLobby() {
   buildCharStrip();
   buildModeButtons();
   buildStartButton();
 }
 
-// --------------------------------------------
 function buildCharStrip() {
   const strip = document.getElementById('charStrip');
   if (!strip) return;
@@ -60,8 +57,18 @@ function selectChar(c, el) {
   if (cn) cn.textContent = c.name;
 }
 
-// --------------------------------------------
 function buildModeButtons() {
+  // We rebuild the HTML here to add the new mode
+  const modePanel = document.querySelector('.mode-panel');
+  if (modePanel) {
+    modePanel.innerHTML = `
+      <div class="mode-label">SELECT MODE</div>
+      <button class="mode-btn" data-mode="explore"><span class="mode-icon">🗺</span><span class="mode-name">EXPLORE MAP</span><span class="mode-sub">no bots · free roam</span></button>
+      <button class="mode-btn" data-mode="bots"><span class="mode-icon">🤖</span><span class="mode-name">PLAY WITH BOTS</span><span class="mode-sub">19 bots · full map</span></button>
+      <button class="mode-btn" data-mode="friends"><span class="mode-icon">👥</span><span class="mode-name">PLAY WITH FRIENDS</span><span class="mode-sub">room code · private</span></button>
+    `;
+  }
+
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-btn').forEach(b => b.style.background = '');
@@ -69,11 +76,12 @@ function buildModeButtons() {
       selectedMode = btn.dataset.mode;
     });
   });
-  const def = document.querySelector('.mode-btn[data-mode="bots"]');
+  
+  // Select explore by default
+  const def = document.querySelector('.mode-btn[data-mode="explore"]');
   if (def) def.style.background = 'rgba(255,138,61,0.25)';
 }
 
-// --------------------------------------------
 function buildStartButton() {
   const start = document.getElementById('startBtn');
   if (!start) return;
@@ -89,8 +97,6 @@ function buildStartButton() {
         character: selectedChar,
         mode: selectedMode
       });
-    } else {
-      console.error('boot3D not found — check script order');
     }
   };
 
@@ -98,6 +104,5 @@ function buildStartButton() {
   start.addEventListener('touchstart', (e) => { e.preventDefault(); doStart(); }, { passive: false });
 }
 
-// --------------------------------------------
 window.initLobby = initLobby;
 window.CHARACTERS = CHARACTERS;
