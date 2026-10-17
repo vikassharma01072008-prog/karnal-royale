@@ -1,12 +1,10 @@
 // ============================================
-// GAME.JS v9 — AI MAP BUILD + CLOSE POV
+// GAME.JS v10 — BUILDING THE SKETCH
 // ============================================
 
 let renderer, scene, camera;
 let clock, running = false;
 let container, worldGroup;
-
-// Store rocks globally so collision can see them
 let rocksData = [];
 
 const state = {
@@ -51,7 +49,7 @@ async function boot3D(config) {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
-  scene.fog = new THREE.Fog(0x87a9c9, 800, 2500); // Closer fog for POV feel
+  scene.fog = new THREE.Fog(0x87a9c9, 1200, 3500);
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 8000);
 
@@ -68,12 +66,12 @@ async function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
-  buildDesignedMap();
+  buildMap();
   buildZones();
   buildRocks();
 
-  // Spawn near the center of the map
-  state.player = createPlayer(config, { x: 2000, y: 2000 });
+  // Spawn at Meeraghati (Center)
+  state.player = createPlayer(config, { x: 1800, y: 2000 });
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
@@ -95,110 +93,94 @@ async function boot3D(config) {
   requestAnimationFrame(loop);
 }
 
-// 1. BUILD THE DESIGNED GROUND
-function buildDesignedMap() {
-  // Base Grass
+// BUILD THE ROADS & GROUND (Matching your sketch)
+function buildMap() {
+  // 1. Grass Base
   const grassImg = window.MAP.imageCache['tile_grass'];
   if (grassImg) {
-    const tex = new THREE.Texture(grassImg);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(20, 20);
-    tex.needsUpdate = true;
+    const tex = new THREE.Texture(grassImg); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(40, 40); tex.needsUpdate = true;
     const geo = new THREE.PlaneGeometry(window.MAP.WORLD_W, window.MAP.WORLD_H);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+    mesh.rotation.x = -Math.PI / 2; mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
     worldGroup.add(mesh);
   }
 
-  // Main Highway (Vertical down the middle)
-  const highImg = window.MAP.imageCache['tile_highway'];
-  if (highImg) {
-    const tex = new THREE.Texture(highImg);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(1, 20);
-    tex.needsUpdate = true;
-    const geo = new THREE.PlaneGeometry(300, window.MAP.WORLD_H);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(window.MAP.WORLD_W/2, 0.1, window.MAP.WORLD_H/2);
-    worldGroup.add(mesh);
-  }
+  const placePiece = (imgKey, config, yOffset) => {
+    const img = window.MAP.imageCache[imgKey];
+    if (!img) return;
+    const tex = new THREE.Texture(img); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true;
+    
+    if (config.w > config.h) tex.repeat.set(config.w / 200, 1);
+    else tex.repeat.set(1, config.h / 200);
 
-  // Railway line (Vertical on the left side)
-  const railImg = window.MAP.imageCache['tile_rail'];
-  if (railImg) {
-    const tex = new THREE.Texture(railImg);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(1, 40);
-    tex.needsUpdate = true;
-    const geo = new THREE.PlaneGeometry(200, window.MAP.WORLD_H);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
-    const mesh = new THREE.Mesh(geo, mat);
+    const geo = new THREE.PlaneGeometry(config.w, config.h);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(600, 0.1, window.MAP.WORLD_H/2);
+    if (config.rot) mesh.rotation.z = config.rot * (Math.PI / 180);
+    mesh.position.set(config.x, yOffset, config.y);
     worldGroup.add(mesh);
-  }
+  };
+
+  // 2. Build Roads
+  window.MAP.ROADS.forEach(r => {
+    if (r.type === 'horizontal') placePiece('tile_horizontal', r, 0.1);
+    else if (r.type === 'vertical') placePiece('tile_vertical', r, 0.1);
+    else if (r.type === 'turn') placePiece('tile_turn', r, 0.1);
+  });
+
+  // 3. Build Rails
+  window.MAP.RAILS.forEach(r => placePiece('tile_rail', r, 0.15)); 
+
+  // 4. Build Rivers
+  window.MAP.RIVERS.forEach(r => placePiece('tile_water', r, 0.05));
 }
 
-// 2. BUILD ZONES (Render Order fixed so character never hides)
+// BUILD ZONES
 function buildZones() {
   for (const z of window.MAP.ZONES) {
     const img = window.MAP.imageCache['zone_' + z.id];
     if (!img) continue;
-
     const tex = new THREE.Texture(img); tex.needsUpdate = true; tex.anisotropy = 8;
-
     const geo = new THREE.PlaneGeometry(z.size, z.size);
+    // depthWrite: false ensures player renders ON TOP of the flat image
     const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, depthWrite: false });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(z.x, 0.2, z.y); 
-    mesh.receiveShadow = true;
     worldGroup.add(mesh);
 
     // Name Tag
-    const nameCanvas = document.createElement('canvas');
-    nameCanvas.width = 512; nameCanvas.height = 128;
+    const nameCanvas = document.createElement('canvas'); nameCanvas.width = 512; nameCanvas.height = 128;
     const nctx = nameCanvas.getContext('2d');
     nctx.fillStyle = 'rgba(0,0,0,0.85)'; nctx.fillRect(0, 0, 512, 128);
     nctx.strokeStyle = '#00ffc8'; nctx.lineWidth = 6; nctx.strokeRect(4, 4, 504, 120);
     nctx.fillStyle = '#00ffc8'; nctx.font = 'bold 50px Arial'; nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
     nctx.fillText(z.name, 256, 64);
     const nameTex = new THREE.CanvasTexture(nameCanvas);
-    const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthTest: false });
-    const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(150, 37), nameMat);
-    nameMesh.rotation.x = -Math.PI / 2; 
-    nameMesh.position.set(z.x, 60, z.y); 
-    nameMesh.renderOrder = 10;
+    const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(150, 37), new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthTest: false }));
+    nameMesh.rotation.x = -Math.PI / 2; nameMesh.position.set(z.x, 60, z.y); nameMesh.renderOrder = 10;
     worldGroup.add(nameMesh);
   }
 }
 
-// 3. BUILD ROCKS (Cover with Collision)
 function buildRocks() {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 1 });
-  rocksData = []; // Reset global array
-
-  for (let i = 0; i < 60; i++) {
-    // Avoid spawning rocks directly on zones or main roads
-    const rx = 300 + Math.random() * (window.MAP.WORLD_W - 600);
-    const ry = 300 + Math.random() * (window.MAP.WORLD_H - 600);
-    
-    // Skip if too close to center highway
-    if (Math.abs(rx - 2000) < 250) continue;
-
+  rocksData = [];
+  for (let i = 0; i < 50; i++) {
+    const rx = 400 + Math.random() * (window.MAP.WORLD_W - 800);
+    const ry = 400 + Math.random() * (window.MAP.WORLD_H - 800);
     const size = 15 + Math.random() * 20;
-    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), rockMat);
-    mesh.position.set(rx, size/2, ry);
-    mesh.rotation.y = Math.random() * Math.PI * 2;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    worldGroup.add(mesh);
+    
+    // Don't spawn rocks on the roads
+    let onRoad = false;
+    for (const r of window.MAP.ROADS) {
+      if (Math.abs(rx - r.x) < (r.w/2 + 50) && Math.abs(ry - r.y) < (r.h/2 + 50)) { onRoad = true; break; }
+    }
+    if (onRoad) continue;
 
-    // Save for collision checking
+    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), rockMat);
+    mesh.position.set(rx, size/2, ry); mesh.castShadow = true; mesh.receiveShadow = true;
+    worldGroup.add(mesh);
     rocksData.push({ x: rx, y: ry, radius: size * 0.8 });
   }
 }
@@ -217,38 +199,25 @@ function showLoading(progress) {
 }
 function hideLoading() { const el = document.getElementById('karnalLoading'); if (el) el.remove(); }
 
-// 4. PLAYER (Tiny scale, Close POV)
 function createPlayer(config, spawn) {
   const prefix = window.BOT.CHAR_PREFIX[config.character.folder] || 'manBlue';
   const folder = config.character.folder;
-  
   const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + folder + '/' + prefix + '_stand.png'), transparent: true });
-  const sprite = new THREE.Sprite(mat); 
-  
-  // HUMAN SCALE (30 units)
-  sprite.scale.set(30, 30, 1); 
-  sprite.renderOrder = 999; // ALWAYS render on top
-  
+  const sprite = new THREE.Sprite(mat); sprite.scale.set(35, 35, 1); sprite.renderOrder = 999;
   const mesh = new THREE.Group(); mesh.add(sprite); mesh.position.set(spawn.x, 20, spawn.y);
-  
   const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(10, 20), shadowMat);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(12, 20), shadowMat);
   shadow.rotation.x = -Math.PI / 2; shadow.position.set(spawn.x, 0.3, spawn.y);
-  
-  return { x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 10, speed: 320, mesh, shadow, sprite, charFolder: folder, prefix, ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12, walkFrame: 0, config };
+  return { x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 12, speed: 280, mesh, shadow, sprite, charFolder: folder, prefix, ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12, walkFrame: 0, config };
 }
 
 function buildBotMesh(bot) {
   const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'), transparent: true });
-  const sprite = new THREE.Sprite(mat); 
-  sprite.scale.set(30, 30, 1);
-  sprite.renderOrder = 999;
-  
+  const sprite = new THREE.Sprite(mat); sprite.scale.set(35, 35, 1); sprite.renderOrder = 999;
   const mesh = new THREE.Group(); mesh.add(sprite); mesh.position.set(bot.x, 20, bot.y);
   bot.mesh = mesh; bot.sprite = sprite;
-  
   const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(10, 20), shadowMat);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(12, 20), shadowMat);
   shadow.rotation.x = -Math.PI / 2; shadow.position.set(bot.x, 0.3, bot.y);
   bot.shadow = shadow;
 }
@@ -272,7 +241,7 @@ function bindJoystick(baseEl, stickEl, ref, isAim) {
 }
 
 function spawnBullet(x, y, angle, owner, ownerId, damage) {
-  const speed = 1600; const geo = new THREE.SphereGeometry(3, 6, 6); // Smaller bullets
+  const speed = 1600; const geo = new THREE.SphereGeometry(3, 6, 6);
   const mat = new THREE.MeshBasicMaterial({ color: owner === 'player' ? 0xffdd44 : 0xff4433 });
   const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, 20, y); worldGroup.add(mesh);
   state.bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.2, owner, ownerId, damage, mesh });
@@ -324,7 +293,6 @@ function updatePlayer(dt) {
   
   p.x += ix * p.speed * dt; p.y += iy * p.speed * dt;
   
-  // APPLY COLLISION TO PLAYER (Zones + Rocks)
   window.MAP.resolveCollisions(p, rocksData);
 
   p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x)); p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
@@ -346,18 +314,11 @@ function getPlayerSpriteName(p) {
   if (Math.hypot(ix, iy) > 0.1) return pre + '_hold.png'; return pre + '_stand.png';
 }
 
-// CLOSE POV CAMERA
 function updateCamera(dt) {
   const p = state.player; 
-  const camHeight = 220; // Lower camera (closer)
-  const camDist = 180;   // Closer distance
+  const camHeight = 220; const camDist = 180; // Close POV
   const tx = p.x, tz = p.y + camDist;
-  
-  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7); 
-  camera.position.y = camHeight; 
-  camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7); 
-  camera.lookAt(p.x, 15, p.y); // Look at player's height
-
+  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7); camera.position.y = camHeight; camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7); camera.lookAt(p.x, 15, p.y);
   const sun = scene.getObjectByName('sun'); if (sun) { sun.position.set(p.x + 500, 1200, p.y + 400); sun.target.position.set(p.x, 0, p.y); sun.target.updateMatrixWorld(); }
 }
 
@@ -373,16 +334,10 @@ function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (!state.gameOver) {
     updatePlayer(dt);
-    
-    for (const b of state.bots) {
-      b.update(dt, state.player, window.MAP);
-      window.MAP.resolveCollisions(b, rocksData); // BOTS COLLIDE WITH ROCKS AND ZONES
-    }
-    
+    for (const b of state.bots) { b.update(dt, state.player, window.MAP); window.MAP.resolveCollisions(b, rocksData); }
     updateBullets(dt); updateBlood(dt);
   }
   updateCamera(dt);
-  
   for (const b of state.bots) {
     if (!b.mesh || !b.alive) continue;
     b.mesh.position.set(b.x, 20, b.y); b.shadow.position.set(b.x, 0.3, b.y);
