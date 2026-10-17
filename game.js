@@ -1,6 +1,5 @@
 // ============================================
-// GAME.JS v6 — TILEMAP WORLD
-// Builds 20x20 grid of tiles + player + bots
+// GAME.JS v7 — TILEMAP + FLAT ZONES
 // ============================================
 
 let renderer, scene, camera;
@@ -9,8 +8,7 @@ let container, worldGroup;
 
 const state = {
   player: null, bots: [], bullets: [], bloodParticles: [],
-  kills: 0, alive: 6,
-  gameOver: false
+  kills: 0, alive: 6, gameOver: false
 };
 
 const spriteCache = {};
@@ -21,15 +19,9 @@ const controls = {
   keys: {}, jumpPressed: false, reloadPressed: false
 };
 
-// ============================================
-// SPRITE LOADER
-// ============================================
 function loadSpriteTexture(path) {
   if (spriteCache[path] !== undefined) return spriteCache[path];
-  const tex = new THREE.TextureLoader().load(
-    path, undefined, undefined,
-    () => console.warn('missing sprite:', path)
-  );
+  const tex = new THREE.TextureLoader().load(path, undefined, undefined, () => {});
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.LinearFilter;
   spriteCache[path] = tex;
@@ -37,23 +29,9 @@ function loadSpriteTexture(path) {
 }
 
 // ============================================
-// TILE TEXTURE FROM RAW IMAGE
-// ============================================
-function makeTileMaterial(rawImg) {
-  if (!rawImg) return new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 1 });
-  const tex = new THREE.Texture(rawImg);
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
-}
-
-// ============================================
 // BOOT
 // ============================================
 async function boot3D(config) {
-  console.log('[KARNAL v6] boot3D', config);
-
   container = document.getElementById('threeContainer');
   document.getElementById('gameScreen').classList.remove('hidden');
   document.getElementById('lobbyOverlay').classList.add('hidden');
@@ -61,38 +39,28 @@ async function boot3D(config) {
   document.getElementById('endOverlay').classList.add('hidden');
 
   showLoading(0);
-
-  console.log('[KARNAL v6] preloading tiles...');
   await window.MAP.preloadMapAssets(p => showLoading(p));
   hideLoading();
 
-  // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
-  // Scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
   scene.fog = new THREE.Fog(0x87a9c9, 1800, 4000);
 
-  // Camera — high + tilted
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 8000);
 
-  // Lights
   scene.add(new THREE.AmbientLight(0xffffff, 0.8));
   scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.5));
   const sun = new THREE.DirectionalLight(0xfff2d8, 0.85);
   sun.position.set(400, 1200, 300);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  const sc = sun.shadow.camera;
-  sc.left = -1000; sc.right = 1000; sc.top = 1000; sc.bottom = -1000;
-  sc.near = 1; sc.far = 4000;
   sun.name = 'sun';
   scene.add(sun);
   scene.add(sun.target);
@@ -100,12 +68,11 @@ async function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
-  // Build world
   buildTilemap();
-  buildCoverObjects();
+  buildZones(); // THIS PLACES THE FLAT IMAGES
 
   // Player
-  state.player = createPlayer(config, getSpawnPoint());
+  state.player = createPlayer(config, { x: 2000, y: 2000 });
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
@@ -125,22 +92,99 @@ async function boot3D(config) {
 
   running = true;
   state.gameOver = false;
-  console.log('[KARNAL v6] loop starting');
   requestAnimationFrame(loop);
 }
 
 // ============================================
-// SPAWN POINT
+// TILEMAP
 // ============================================
-function getSpawnPoint() {
-  return {
-    x: window.MAP.WORLD_W / 2,
-    y: window.MAP.WORLD_H / 2
-  };
+function buildTilemap() {
+  const T = window.MAP.TILE_SIZE;
+  const matCache = {};
+  
+  for (const type of Object.keys(window.MAP.TILE_FILES)) {
+    const img = window.MAP.imageCache['tile_' + type];
+    if (img) {
+      const tex = new THREE.Texture(img);
+      tex.needsUpdate = true;
+      matCache[type] = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
+    } else {
+      matCache[type] = new THREE.MeshStandardMaterial({ color: 0x5a7a3a });
+    }
+  }
+
+  const tileGeo = new THREE.PlaneGeometry(T, T);
+
+  for (let row = 0; row < window.MAP.GRID_ROWS; row++) {
+    for (let col = 0; col < window.MAP.GRID_COLS; col++) {
+      const type = window.MAP.getTileTypeAt(col, row);
+      const mat = matCache[type] || matCache.grass;
+
+      const tile = new THREE.Mesh(tileGeo, mat);
+      tile.rotation.x = -Math.PI / 2;
+      tile.position.set(col * T + T/2, 0, row * T + T/2);
+      tile.receiveShadow = true;
+      worldGroup.add(tile);
+    }
+  }
 }
 
 // ============================================
-// LOADING
+// ZONES — Places flat images on ground
+// ============================================
+function buildZones() {
+  for (const z of window.MAP.ZONES) {
+    const img = window.MAP.imageCache['zone_' + z.id];
+    if (!img) {
+      console.warn('Zone image missing:', z.id);
+      continue; // skips if image is not found
+    }
+
+    const tex = new THREE.Texture(img);
+    tex.needsUpdate = true;
+    tex.anisotropy = 8;
+
+    // A flat plane on the ground
+    const geo = new THREE.PlaneGeometry(z.size, z.size);
+    const mat = new THREE.MeshStandardMaterial({ 
+      map: tex, 
+      transparent: true, 
+      roughness: 0.8,
+      depthWrite: false // Fixes overlapping texture glitch
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2; // Lay flat
+    mesh.position.set(z.x, 0.05, z.y); // Slightly above the grass
+    mesh.receiveShadow = true;
+    worldGroup.add(mesh);
+
+    // Add Zone Name Tag floating above
+    const nameCanvas = document.createElement('canvas');
+    nameCanvas.width = 512; nameCanvas.height = 128;
+    const nctx = nameCanvas.getContext('2d');
+    nctx.fillStyle = 'rgba(0,0,0,0.85)';
+    nctx.fillRect(0, 0, 512, 128);
+    nctx.strokeStyle = '#00ffc8';
+    nctx.lineWidth = 6;
+    nctx.strokeRect(4, 4, 504, 120);
+    nctx.fillStyle = '#00ffc8';
+    nctx.font = 'bold 50px Arial';
+    nctx.textAlign = 'center';
+    nctx.textBaseline = 'middle';
+    nctx.fillText(z.name, 256, 64);
+    
+    const nameTex = new THREE.CanvasTexture(nameCanvas);
+    const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthTest: false });
+    const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(160, 40), nameMat);
+    nameMesh.rotation.x = -Math.PI / 2;
+    nameMesh.position.set(z.x, 60, z.y); // Floats 60 units above the ground
+    worldGroup.add(nameMesh);
+  }
+}
+
+// ============================================
+// LOADING UI
 // ============================================
 function showLoading(progress) {
   let el = document.getElementById('karnalLoading');
@@ -163,77 +207,16 @@ function hideLoading() {
 }
 
 // ============================================
-// TILEMAP — builds 400 tiles from grid
-// ============================================
-function buildTilemap() {
-  const T = window.MAP.TILE_SIZE;
-  const cols = window.MAP.GRID_COLS;
-  const rows = window.MAP.GRID_ROWS;
-
-  // Cache of materials per tile-type
-  const matCache = {};
-  for (const type of Object.keys(window.MAP.TILE_FILES)) {
-    const img = window.MAP.imageCache['tile_' + type];
-    matCache[type] = makeTileMaterial(img);
-  }
-
-  // Reusable plane geometry (vertical — rotate per tile)
-  const tileGeo = new THREE.PlaneGeometry(T, T);
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const type = window.MAP.getTileTypeAt(col, row);
-      const mat = matCache[type] || matCache.grass;
-
-      const tile = new THREE.Mesh(tileGeo, mat);
-      tile.rotation.x = -Math.PI / 2;
-      tile.position.set(
-        col * T + T/2,
-        0,
-        row * T + T/2
-      );
-      tile.receiveShadow = true;
-      worldGroup.add(tile);
-    }
-  }
-  console.log('[KARNAL v6] tilemap built:', cols * rows, 'tiles');
-}
-
-// ============================================
-// COVER OBJECTS — small rocks scattered
-// ============================================
-function buildCoverObjects() {
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1 });
-
-  for (let i = 0; i < 40; i++) {
-    const x = 300 + Math.random() * (window.MAP.WORLD_W - 600);
-    const y = 300 + Math.random() * (window.MAP.WORLD_H - 600);
-
-    const s = 10 + Math.random() * 14;
-    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
-    mesh.position.set(x, s * 0.5, y);
-    mesh.rotation.y = Math.random() * Math.PI * 2;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    worldGroup.add(mesh);
-  }
-}
-
-// ============================================
-// PLAYER
+// PLAYER & BOTS
 // ============================================
 function createPlayer(config, spawn) {
   const prefix = window.BOT.CHAR_PREFIX[config.character.folder] || 'manBlue';
   const folder = config.character.folder;
 
-  const mat = new THREE.SpriteMaterial({
-    map: loadSpriteTexture('assets/' + folder + '/' + prefix + '_stand.png'),
-    transparent: true, depthTest: false
-  });
+  const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + folder + '/' + prefix + '_stand.png'), transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(80, 80, 1); // human-size vs 200-unit tiles
-  sprite.center.set(0.5, 0.5);
-
+  sprite.scale.set(80, 80, 1);
+  
   const mesh = new THREE.Group();
   mesh.add(sprite);
   mesh.position.set(spawn.x, 40, spawn.y);
@@ -244,25 +227,15 @@ function createPlayer(config, spawn) {
   shadow.position.set(spawn.x, 0.6, spawn.y);
 
   return {
-    x: spawn.x, y: spawn.y, angle: 0,
-    hp: 100, maxHp: 100, radius: 20, speed: 380,
-    mesh, shadow, sprite,
-    charFolder: folder, prefix,
-    ammo: 30, maxAmmo: 30,
-    reloadTimer: 0, reloadDuration: 1.8,
-    shootCooldown: 0, fireRate: 0.12,
+    x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 20, speed: 380,
+    mesh, shadow, sprite, charFolder: folder, prefix,
+    ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12,
     walkFrame: 0, hitFlash: 0, config
   };
 }
 
-// ============================================
-// BOT MESH
-// ============================================
 function buildBotMesh(bot) {
-  const mat = new THREE.SpriteMaterial({
-    map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'),
-    transparent: true, depthTest: false
-  });
+  const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'), transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(80, 80, 1);
   const mesh = new THREE.Group();
@@ -283,7 +256,7 @@ function buildBotMesh(bot) {
 // ============================================
 function setupControls() {
   bindJoystick(document.getElementById('joyBase'), document.getElementById('joyStick'), controls.move, false);
-  bindJoystick(document.getElementById('aimBase'), document.getElementById('aimStick'), controls.aim,  true);
+  bindJoystick(document.getElementById('aimBase'), document.getElementById('aimStick'), controls.aim, true);
 
   const btnJump = document.getElementById('btnJump');
   if (btnJump) {
@@ -347,7 +320,7 @@ function bindJoystick(baseEl, stickEl, ref, isAim) {
 }
 
 // ============================================
-// BULLETS
+// BULLETS & COMBAT
 // ============================================
 function spawnBullet(x, y, angle, owner, ownerId, damage) {
   const speed = 1600;
@@ -356,20 +329,13 @@ function spawnBullet(x, y, angle, owner, ownerId, damage) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(x, 40, y);
   worldGroup.add(mesh);
-  state.bullets.push({
-    x, y,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    life: 1.2, owner, ownerId, damage, mesh
-  });
+  state.bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.2, owner, ownerId, damage, mesh });
 }
 
 function updateBullets(dt) {
   for (let i = state.bullets.length - 1; i >= 0; i--) {
     const b = state.bullets[i];
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
-    b.life -= dt;
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
     b.mesh.position.set(b.x, 40, b.y);
     let hit = false;
 
@@ -399,9 +365,6 @@ function updateBullets(dt) {
   }
 }
 
-// ============================================
-// BLOOD
-// ============================================
 function spawnBlood(x, y) {
   for (let i = 0; i < 8; i++) {
     const geo = new THREE.SphereGeometry(3, 4, 4);
@@ -419,8 +382,7 @@ function updateBlood(dt) {
   for (let i = state.bloodParticles.length - 1; i >= 0; i--) {
     const p = state.bloodParticles[i];
     p.x += p.vx * dt; p.y += p.vy * dt;
-    p.vx *= 0.92; p.vy *= 0.92;
-    p.life -= dt;
+    p.vx *= 0.92; p.vy *= 0.92; p.life -= dt;
     p.mesh.position.set(p.x, 40, p.y);
     p.mesh.material.opacity = Math.max(0, p.life * 2);
     p.mesh.material.transparent = true;
@@ -432,13 +394,9 @@ function updateBlood(dt) {
   }
 }
 
-// ============================================
-// DAMAGE
-// ============================================
 function damagePlayer(amount) {
   if (state.gameOver) return;
   state.player.hp -= amount;
-  state.player.hitFlash = 0.15;
   updateHPBar();
   if (state.player.hp <= 0) { state.player.hp = 0; endGame(false); }
 }
@@ -447,47 +405,28 @@ function updateHPBar() {
   const hp = Math.max(0, state.player ? state.player.hp : 100);
   const bar = document.getElementById('hpBar');
   const txt = document.getElementById('hpText');
-  if (bar) {
-    bar.style.width = hp + '%';
-    bar.classList.remove('low','mid');
-    if (hp < 30) bar.classList.add('low');
-    else if (hp < 60) bar.classList.add('mid');
-  }
+  if (bar) { bar.style.width = hp + '%'; bar.classList.remove('low','mid'); if (hp < 30) bar.classList.add('low'); else if (hp < 60) bar.classList.add('mid'); }
   if (txt) txt.textContent = Math.round(hp);
 }
 
-// ============================================
-// EVENTS
-// ============================================
 function onBotKilled(bot, fromId) {
   if (bot.mesh) worldGroup.remove(bot.mesh);
   if (bot.shadow) worldGroup.remove(bot.shadow);
   state.alive--;
-  if (fromId === 'player') { state.kills++; addKillFeed('YOU ☠ ' + bot.name); }
-  else addKillFeed(bot.name + ' ☠');
+  if (fromId === 'player') { state.kills++; addKillFeed('YOU ☠ ' + bot.name); } else addKillFeed(bot.name + ' ☠');
   updateAliveHUD(); updateKillsHUD();
   spawnBlood(bot.x, bot.y);
   if (state.alive <= 1 && !state.gameOver) endGame(true);
 }
 
-function updateAliveHUD() {
-  const el = document.getElementById('aliveCount');
-  if (el) el.textContent = state.alive;
-}
-function updateKillsHUD() {
-  const el = document.getElementById('killCount');
-  if (el) el.textContent = state.kills;
-}
+function updateAliveHUD() { const el = document.getElementById('aliveCount'); if (el) el.textContent = state.alive; }
+function updateKillsHUD() { const el = document.getElementById('killCount'); if (el) el.textContent = state.kills; }
 function addKillFeed(text) {
-  const feed = document.getElementById('killFeed');
-  if (!feed) return;
-  const div = document.createElement('div');
-  div.className = 'kill-item';
-  div.textContent = text;
-  feed.appendChild(div);
-  setTimeout(() => div.classList.add('fade'), 2500);
-  setTimeout(() => div.remove(), 3200);
+  const feed = document.getElementById('killFeed'); if (!feed) return;
+  const div = document.createElement('div'); div.className = 'kill-item'; div.textContent = text;
+  feed.appendChild(div); setTimeout(() => div.classList.add('fade'), 2500); setTimeout(() => div.remove(), 3200);
 }
+function updateAmmoHUD() { const el = document.getElementById('ammoCount'); if (el) el.textContent = state.player.ammo; }
 
 // ============================================
 // PLAYER UPDATE
@@ -500,9 +439,7 @@ function updatePlayer(dt) {
     p.reloadTimer -= dt;
     if (p.reloadTimer <= 0) { p.ammo = p.maxAmmo; updateAmmoHUD(); }
   }
-  if (controls.reloadPressed && p.ammo < p.maxAmmo && p.reloadTimer <= 0) {
-    p.reloadTimer = p.reloadDuration;
-  }
+  if (controls.reloadPressed && p.ammo < p.maxAmmo && p.reloadTimer <= 0) p.reloadTimer = p.reloadDuration;
   controls.reloadPressed = false;
 
   let ix = 0, iy = 0;
@@ -516,16 +453,17 @@ function updatePlayer(dt) {
 
   p.x += ix * p.speed * dt;
   p.y += iy * p.speed * dt;
+  
+  // Call the new collision system from map.js
+  window.MAP.resolveCollisions(p);
+
   p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x));
   p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
 
   if (mag > 0.1) p.walkFrame += dt * 8;
 
-  if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) {
-    p.angle = Math.atan2(controls.aim.dy, controls.aim.dx);
-  } else if (mag > 0.1) {
-    p.angle = Math.atan2(iy, ix);
-  }
+  if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) p.angle = Math.atan2(controls.aim.dy, controls.aim.dx);
+  else if (mag > 0.1) p.angle = Math.atan2(iy, ix);
 
   if (p.shootCooldown > 0) p.shootCooldown -= dt;
   if ((controls.aim.firing || controls.keys[' ']) && p.shootCooldown <= 0 && p.ammo > 0 && p.reloadTimer <= 0) {
@@ -539,17 +477,12 @@ function updatePlayer(dt) {
     if (p.ammo === 0) p.reloadTimer = p.reloadDuration;
   }
 
-  if (p.hitFlash > 0) p.hitFlash -= dt;
-
   p.mesh.position.set(p.x, 40, p.y);
   p.shadow.position.set(p.x, 0.6, p.y);
 
   const spriteName = getPlayerSpriteName(p);
   const newTex = loadSpriteTexture('assets/' + p.charFolder + '/' + spriteName);
-  if (p.sprite.material.map !== newTex) {
-    p.sprite.material.map = newTex;
-    p.sprite.material.needsUpdate = true;
-  }
+  if (p.sprite.material.map !== newTex) { p.sprite.material.map = newTex; p.sprite.material.needsUpdate = true; }
 }
 
 function getPlayerSpriteName(p) {
@@ -563,20 +496,14 @@ function getPlayerSpriteName(p) {
   return pre + '_stand.png';
 }
 
-function updateAmmoHUD() {
-  const el = document.getElementById('ammoCount');
-  if (el) el.textContent = state.player.ammo;
-}
-
 // ============================================
-// CAMERA — top-down tilted
+// CAMERA
 // ============================================
 function updateCamera(dt) {
   const p = state.player;
   const camHeight = 480;
   const camDist   = 420;
-  const tx = p.x;
-  const tz = p.y + camDist;
+  const tx = p.x, tz = p.y + camDist;
   camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7);
   camera.position.y  = camHeight;
   camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7);
@@ -591,7 +518,7 @@ function updateCamera(dt) {
 }
 
 // ============================================
-// END GAME
+// END GAME & LOOP
 // ============================================
 function endGame(win) {
   if (state.gameOver) return;
@@ -602,18 +529,12 @@ function endGame(win) {
   const s  = document.getElementById('endSub');
   if (ov) ov.classList.remove('hidden');
   if (t) { t.textContent = win ? 'VICTORY' : 'DEFEATED'; t.classList.toggle('dead', !win); }
-  if (s) s.textContent = win
-    ? 'Winner winner chicken dinner · ' + state.kills + ' kills'
-    : 'You were eliminated · ' + state.kills + ' kills';
+  if (s) s.textContent = win ? 'Winner winner chicken dinner · ' + state.kills + ' kills' : 'You were eliminated · ' + state.kills + ' kills';
 }
 
-// ============================================
-// MAIN LOOP
-// ============================================
 function loop() {
   if (!running) return;
   const dt = Math.min(clock.getDelta(), 0.05);
-
   if (!state.gameOver) {
     updatePlayer(dt);
     for (const b of state.bots) b.update(dt, state.player, window.MAP);
@@ -627,10 +548,7 @@ function loop() {
     b.mesh.position.set(b.x, 40, b.y);
     b.shadow.position.set(b.x, 0.6, b.y);
     const sp = loadSpriteTexture(b.getSprite());
-    if (b.sprite.material.map !== sp) {
-      b.sprite.material.map = sp;
-      b.sprite.material.needsUpdate = true;
-    }
+    if (b.sprite.material.map !== sp) { b.sprite.material.map = sp; b.sprite.material.needsUpdate = true; }
   }
 
   renderer.render(scene, camera);
