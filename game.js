@@ -1,5 +1,5 @@
 // ============================================
-// GAME.JS v8 — REAL TILEMAP SUPPORT
+// GAME.JS v8 — REAL MAP + FIXED RENDERING
 // ============================================
 
 let renderer, scene, camera;
@@ -48,7 +48,7 @@ async function boot3D(config) {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
-  scene.fog = new THREE.Fog(0x87a9c9, 1800, 4000);
+  scene.fog = new THREE.Fog(0x87a9c9, 1500, 3500); // Fog hides the edges of map.png
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 8000);
 
@@ -65,9 +65,10 @@ async function boot3D(config) {
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
 
-  buildTilemap();
+  buildBaseMap();
   buildZones();
 
+  // Spawn at Haveli
   state.player = createPlayer(config, { x: 2000, y: 2000 });
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
@@ -90,33 +91,34 @@ async function boot3D(config) {
   requestAnimationFrame(loop);
 }
 
-function buildTilemap() {
-  const T = window.MAP.TILE_SIZE;
-  const matCache = {};
-  for (const type of Object.keys(window.MAP.TILE_FILES)) {
-    const img = window.MAP.imageCache['tile_' + type];
-    if (img) {
-      const tex = new THREE.Texture(img); tex.needsUpdate = true; tex.anisotropy = 8;
-      matCache[type] = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
-    } else {
-      matCache[type] = new THREE.MeshStandardMaterial({ color: 0x5a7a3a });
-    }
+// 1. BUILD THE GROUND (map.png)
+function buildBaseMap() {
+  const img = window.MAP.imageCache['base_map'];
+  if (!img) {
+    // Fallback green ground if map missing
+    const geo = new THREE.PlaneGeometry(window.MAP.WORLD_W, window.MAP.WORLD_H);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2e6a2e });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
+    worldGroup.add(mesh);
+    return;
   }
+
+  const tex = new THREE.Texture(img); 
+  tex.needsUpdate = true; 
+  tex.anisotropy = 8;
   
-  const tileGeo = new THREE.PlaneGeometry(T, T);
-  for (let row = 0; row < window.MAP.GRID_ROWS; row++) {
-    for (let col = 0; col < window.MAP.GRID_COLS; col++) {
-      const type = window.MAP.getTileTypeAt(col, row);
-      const mat = matCache[type] || matCache.grass;
-      const tile = new THREE.Mesh(tileGeo, mat);
-      tile.rotation.x = -Math.PI / 2;
-      tile.position.set(col * T + T/2, 0, row * T + T/2);
-      tile.receiveShadow = true;
-      worldGroup.add(tile);
-    }
-  }
+  const geo = new THREE.PlaneGeometry(window.MAP.WORLD_W, window.MAP.WORLD_H);
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
+  mesh.receiveShadow = true;
+  worldGroup.add(mesh);
 }
 
+// 2. BUILD ZONES (Fixing the hiding bug!)
 function buildZones() {
   for (const z of window.MAP.ZONES) {
     const img = window.MAP.imageCache['zone_' + z.id];
@@ -125,13 +127,16 @@ function buildZones() {
     const tex = new THREE.Texture(img); tex.needsUpdate = true; tex.anisotropy = 8;
 
     const geo = new THREE.PlaneGeometry(z.size, z.size);
+    // depthWrite: false means the 3D objects (player) will render ON TOP of the flat image
     const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, depthWrite: false });
+    
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(z.x, 0.05, z.y); 
+    mesh.position.set(z.x, 0.1, z.y); // Slightly above the base map
     mesh.receiveShadow = true;
     worldGroup.add(mesh);
 
+    // Name Tag (Floating flat)
     const nameCanvas = document.createElement('canvas');
     nameCanvas.width = 512; nameCanvas.height = 128;
     const nctx = nameCanvas.getContext('2d');
@@ -141,8 +146,10 @@ function buildZones() {
     nctx.fillText(z.name, 256, 64);
     const nameTex = new THREE.CanvasTexture(nameCanvas);
     const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthTest: false });
-    const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(160, 40), nameMat);
-    nameMesh.rotation.x = -Math.PI / 2; nameMesh.position.set(z.x, 60, z.y); 
+    const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(150, 37), nameMat);
+    nameMesh.rotation.x = -Math.PI / 2; 
+    nameMesh.position.set(z.x, 50, z.y); // Floats 50 units up
+    nameMesh.renderOrder = 10; // Always draws on top
     worldGroup.add(nameMesh);
   }
 }
@@ -161,26 +168,39 @@ function showLoading(progress) {
 }
 function hideLoading() { const el = document.getElementById('karnalLoading'); if (el) el.remove(); }
 
+// 3. PLAYER (Tiny scale + renderOrder fix)
 function createPlayer(config, spawn) {
   const prefix = window.BOT.CHAR_PREFIX[config.character.folder] || 'manBlue';
   const folder = config.character.folder;
-  const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + folder + '/' + prefix + '_stand.png'), transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(mat); sprite.scale.set(80, 80, 1);
-  const mesh = new THREE.Group(); mesh.add(sprite); mesh.position.set(spawn.x, 40, spawn.y);
-  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 });
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(24, 20), shadowMat);
-  shadow.rotation.x = -Math.PI / 2; shadow.position.set(spawn.x, 0.6, spawn.y);
-  return { x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 20, speed: 380, mesh, shadow, sprite, charFolder: folder, prefix, ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12, walkFrame: 0, config };
+  
+  const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + folder + '/' + prefix + '_stand.png'), transparent: true });
+  const sprite = new THREE.Sprite(mat); 
+  
+  // HUMAN SCALE! (Changed from 80 to 35)
+  sprite.scale.set(35, 35, 1); 
+  sprite.renderOrder = 999; // ALWAYS render on top of flat images
+  
+  const mesh = new THREE.Group(); mesh.add(sprite); mesh.position.set(spawn.x, 25, spawn.y);
+  
+  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(12, 20), shadowMat);
+  shadow.rotation.x = -Math.PI / 2; shadow.position.set(spawn.x, 0.2, spawn.y);
+  
+  return { x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 12, speed: 280, mesh, shadow, sprite, charFolder: folder, prefix, ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12, walkFrame: 0, config };
 }
 
 function buildBotMesh(bot) {
-  const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'), transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(mat); sprite.scale.set(80, 80, 1);
-  const mesh = new THREE.Group(); mesh.add(sprite); mesh.position.set(bot.x, 40, bot.y);
+  const mat = new THREE.SpriteMaterial({ map: loadSpriteTexture('assets/' + bot.charFolder + '/' + bot.prefix + '_stand.png'), transparent: true });
+  const sprite = new THREE.Sprite(mat); 
+  sprite.scale.set(35, 35, 1);
+  sprite.renderOrder = 999;
+  
+  const mesh = new THREE.Group(); mesh.add(sprite); mesh.position.set(bot.x, 25, bot.y);
   bot.mesh = mesh; bot.sprite = sprite;
-  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 });
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(24, 20), shadowMat);
-  shadow.rotation.x = -Math.PI / 2; shadow.position.set(bot.x, 0.6, bot.y);
+  
+  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(12, 20), shadowMat);
+  shadow.rotation.x = -Math.PI / 2; shadow.position.set(bot.x, 0.2, bot.y);
   bot.shadow = shadow;
 }
 
@@ -203,15 +223,15 @@ function bindJoystick(baseEl, stickEl, ref, isAim) {
 }
 
 function spawnBullet(x, y, angle, owner, ownerId, damage) {
-  const speed = 1600; const geo = new THREE.SphereGeometry(4, 6, 6);
+  const speed = 1600; const geo = new THREE.SphereGeometry(3, 6, 6); // Smaller bullets
   const mat = new THREE.MeshBasicMaterial({ color: owner === 'player' ? 0xffdd44 : 0xff4433 });
-  const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, 40, y); worldGroup.add(mesh);
+  const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, 25, y); worldGroup.add(mesh);
   state.bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.2, owner, ownerId, damage, mesh });
 }
 
 function updateBullets(dt) {
   for (let i = state.bullets.length - 1; i >= 0; i--) {
-    const b = state.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.mesh.position.set(b.x, 40, b.y);
+    const b = state.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.mesh.position.set(b.x, 25, b.y);
     let hit = false;
     if (b.owner === 'player') { for (const bot of state.bots) { if (!bot.alive) continue; if (Math.hypot(bot.x - b.x, bot.y - b.y) < bot.radius + 6) { bot.takeDamage(b.damage, 'player'); spawnBlood(b.x, b.y); hit = true; break; } } }
     else { const p = state.player; if (p.hp > 0 && Math.hypot(p.x - b.x, p.y - b.y) < p.radius + 6) { damagePlayer(b.damage); spawnBlood(b.x, b.y); hit = true; } }
@@ -220,9 +240,9 @@ function updateBullets(dt) {
 }
 
 function spawnBlood(x, y) {
-  for (let i = 0; i < 8; i++) {
-    const geo = new THREE.SphereGeometry(3, 4, 4); const mat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
-    const m = new THREE.Mesh(geo, mat); m.position.set(x, 40, y); worldGroup.add(m);
+  for (let i = 0; i < 6; i++) {
+    const geo = new THREE.SphereGeometry(2, 4, 4); const mat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, 25, y); worldGroup.add(m);
     const a = Math.random() * Math.PI * 2; const sp = 200 + Math.random() * 200;
     state.bloodParticles.push({ mesh: m, x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 0.5 });
   }
@@ -230,7 +250,7 @@ function spawnBlood(x, y) {
 
 function updateBlood(dt) {
   for (let i = state.bloodParticles.length - 1; i >= 0; i--) {
-    const p = state.bloodParticles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; p.mesh.position.set(p.x, 40, p.y);
+    const p = state.bloodParticles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; p.mesh.position.set(p.x, 25, p.y);
     p.mesh.material.opacity = Math.max(0, p.life * 2); p.mesh.material.transparent = true;
     if (p.life <= 0) { worldGroup.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); state.bloodParticles.splice(i, 1); }
   }
@@ -255,17 +275,17 @@ function updatePlayer(dt) {
   
   p.x += ix * p.speed * dt; p.y += iy * p.speed * dt;
   
-  window.MAP.resolveCollisions(p); 
+  window.MAP.resolveCollisions(p); // Player Collision (No walking through buildings)
 
   p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x)); p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
   if (mag > 0.1) p.walkFrame += dt * 8;
   if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) p.angle = Math.atan2(controls.aim.dy, controls.aim.dx); else if (mag > 0.1) p.angle = Math.atan2(iy, ix);
   if (p.shootCooldown > 0) p.shootCooldown -= dt;
   if ((controls.aim.firing || controls.keys[' ']) && p.shootCooldown <= 0 && p.ammo > 0 && p.reloadTimer <= 0) {
-    const bx = p.x + Math.cos(p.angle) * 40; const by = p.y + Math.sin(p.angle) * 40; const spread = (Math.random() - 0.5) * 0.06;
+    const bx = p.x + Math.cos(p.angle) * 30; const by = p.y + Math.sin(p.angle) * 30; const spread = (Math.random() - 0.5) * 0.06;
     spawnBullet(bx, by, p.angle + spread, 'player', 'player', 18); p.ammo--; p.shootCooldown = p.fireRate; updateAmmoHUD(); if (p.ammo === 0) p.reloadTimer = p.reloadDuration;
   }
-  p.mesh.position.set(p.x, 40, p.y); p.shadow.position.set(p.x, 0.6, p.y);
+  p.mesh.position.set(p.x, 25, p.y); p.shadow.position.set(p.x, 0.2, p.y);
   const spriteName = getPlayerSpriteName(p); const newTex = loadSpriteTexture('assets/' + p.charFolder + '/' + spriteName);
   if (p.sprite.material.map !== newTex) { p.sprite.material.map = newTex; p.sprite.material.needsUpdate = true; }
 }
@@ -277,8 +297,15 @@ function getPlayerSpriteName(p) {
 }
 
 function updateCamera(dt) {
-  const p = state.player; const camHeight = 480; const camDist = 420; const tx = p.x, tz = p.y + camDist;
-  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7); camera.position.y = camHeight; camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7); camera.lookAt(p.x, 0, p.y);
+  const p = state.player; 
+  const camHeight = 280; // Lower camera (closer to human)
+  const camDist = 220; 
+  const tx = p.x, tz = p.y + camDist;
+  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7); 
+  camera.position.y = camHeight; 
+  camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7); 
+  camera.lookAt(p.x, 15, p.y); // Look closer to player height
+
   const sun = scene.getObjectByName('sun'); if (sun) { sun.position.set(p.x + 500, 1200, p.y + 400); sun.target.position.set(p.x, 0, p.y); sun.target.updateMatrixWorld(); }
 }
 
@@ -294,16 +321,19 @@ function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (!state.gameOver) {
     updatePlayer(dt);
+    
     for (const b of state.bots) {
       b.update(dt, state.player, window.MAP);
-      window.MAP.resolveCollisions(b);
+      window.MAP.resolveCollisions(b); // BOTS GET COLLISION TOO
     }
+    
     updateBullets(dt); updateBlood(dt);
   }
   updateCamera(dt);
+  
   for (const b of state.bots) {
     if (!b.mesh || !b.alive) continue;
-    b.mesh.position.set(b.x, 40, b.y); b.shadow.position.set(b.x, 0.6, b.y);
+    b.mesh.position.set(b.x, 25, b.y); b.shadow.position.set(b.x, 0.2, b.y);
     const sp = loadSpriteTexture(b.getSprite()); if (b.sprite.material.map !== sp) { b.sprite.material.map = sp; b.sprite.material.needsUpdate = true; }
   }
   renderer.render(scene, camera); requestAnimationFrame(loop);
