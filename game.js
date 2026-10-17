@@ -1,15 +1,14 @@
 // ============================================
-// GAME.JS v11 — TRUE POV + FULL CONTRAST
+// GAME.JS v12 — EXPLORE MODE + POV + BOX COLLISION
 // ============================================
 
 let renderer, scene, camera;
 let clock, running = false;
 let container, worldGroup;
-let rocksData = [];
 
 const state = {
   player: null, bots: [], bullets: [], bloodParticles: [],
-  kills: 0, alive: 6, gameOver: false
+  kills: 0, alive: 1, gameOver: false
 };
 
 const spriteCache = {};
@@ -44,30 +43,21 @@ async function boot3D(config) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  
-  // --- FIX CONTRAST WASHOUT ---
-  renderer.outputEncoding = THREE.sRGBEncoding; 
-  renderer.toneMapping = THREE.NoToneMapping;
-
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
-  scene.fog = new THREE.Fog(0x87a9c9, 1500, 4000);
+  scene.fog = new THREE.Fog(0x87a9c9, 1000, 3000);
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 8000);
 
-  // Reduced ambient light so shadows pop
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.4));
-  
-  const sun = new THREE.DirectionalLight(0xfff2d8, 0.9);
-  sun.position.set(500, 1500, 500);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.5));
+  const sun = new THREE.DirectionalLight(0xfff2d8, 0.85);
+  sun.position.set(400, 1200, 300);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -2000; sun.shadow.camera.right = 2000;
-  sun.shadow.camera.top = 2000; sun.shadow.camera.bottom = -2000;
   sun.name = 'sun';
   scene.add(sun);
   scene.add(sun.target);
@@ -77,20 +67,25 @@ async function boot3D(config) {
 
   buildMap();
   buildZones();
-  buildRocks();
 
-  // Spawn at Karan (Center)
-  state.player = createPlayer(config, { x: 2200, y: 2200 });
+  state.player = createPlayer(config, { x: 2000, y: 2000 });
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
-  state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
-  for (const b of state.bots) {
-    buildBotMesh(b);
-    worldGroup.add(b.mesh);
-    worldGroup.add(b.shadow);
+  // EXPLORE MODE CHECK
+  if (config.mode !== 'explore') {
+    state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
+    for (const b of state.bots) {
+      buildBotMesh(b);
+      worldGroup.add(b.mesh);
+      worldGroup.add(b.shadow);
+    }
+    state.alive = state.bots.length + 1;
+  } else {
+    state.alive = 1;
+    console.log('[KARNAL] Explore Mode: 0 bots spawned.');
   }
-  state.alive = state.bots.length + 1;
+  
   updateAliveHUD();
 
   clock = new THREE.Clock();
@@ -102,20 +97,13 @@ async function boot3D(config) {
   requestAnimationFrame(loop);
 }
 
-// BUILD THE ROADS & GRASS
 function buildMap() {
-  // 1. Massive Grass Base (Fills ALL white space)
   const grassImg = window.MAP.imageCache['tile_grass'];
   if (grassImg) {
-    const tex = new THREE.Texture(grassImg); 
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; 
-    tex.repeat.set(60, 60); 
-    tex.needsUpdate = true;
+    const tex = new THREE.Texture(grassImg); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(60, 60); tex.needsUpdate = true;
     const geo = new THREE.PlaneGeometry(window.MAP.WORLD_W, window.MAP.WORLD_H);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
-    mesh.rotation.x = -Math.PI / 2; 
-    mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
-    mesh.receiveShadow = true;
+    mesh.rotation.x = -Math.PI / 2; mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
     worldGroup.add(mesh);
   }
 
@@ -123,8 +111,6 @@ function buildMap() {
     const img = window.MAP.imageCache[imgKey];
     if (!img) return;
     const tex = new THREE.Texture(img); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true;
-    
-    // Repeat based on length
     if (config.w > config.h) tex.repeat.set(config.w / 200, 1);
     else tex.repeat.set(1, config.h / 200);
 
@@ -135,30 +121,26 @@ function buildMap() {
     worldGroup.add(mesh);
   };
 
-  // 2. Build Roads using Horizontal and Vertical tiles
   window.MAP.ROADS.forEach(r => {
     if (r.w > r.h) placePiece('tile_horizontal', r, 0.1);
     else placePiece('tile_vertical', r, 0.1);
   });
 
-  // 3. Build Rails
   window.MAP.RAILS.forEach(r => placePiece('tile_rail', r, 0.15)); 
 }
 
-// BUILD ZONES (Fixing contrast!)
 function buildZones() {
   for (const z of window.MAP.ZONES) {
     const img = window.MAP.imageCache['zone_' + z.id];
     if (!img) continue;
     
     const tex = new THREE.Texture(img); 
-    tex.encoding = THREE.sRGBEncoding; // Fix color washout
+    tex.encoding = THREE.sRGBEncoding; // Fix contrast
     tex.needsUpdate = true; 
     tex.anisotropy = 8;
     
     const geo = new THREE.PlaneGeometry(z.size, z.size);
-    
-    // MeshBasicMaterial ignores lights -> 100% perfect contrast of your images
+    // Full contrast, ignores shadows
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
     
     const mesh = new THREE.Mesh(geo, mat);
@@ -177,28 +159,6 @@ function buildZones() {
     const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(150, 37), new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthTest: false }));
     nameMesh.rotation.x = -Math.PI / 2; nameMesh.position.set(z.x, 60, z.y); nameMesh.renderOrder = 10;
     worldGroup.add(nameMesh);
-  }
-}
-
-function buildRocks() {
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 1 });
-  rocksData = [];
-  for (let i = 0; i < 60; i++) {
-    const rx = 400 + Math.random() * (window.MAP.WORLD_W - 800);
-    const ry = 400 + Math.random() * (window.MAP.WORLD_H - 800);
-    const size = 15 + Math.random() * 20;
-    
-    // Don't spawn rocks on the roads
-    let onRoad = false;
-    for (const r of window.MAP.ROADS) {
-      if (Math.abs(rx - r.x) < (r.w/2 + 50) && Math.abs(ry - r.y) < (r.h/2 + 50)) { onRoad = true; break; }
-    }
-    if (onRoad) continue;
-
-    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), rockMat);
-    mesh.position.set(rx, size/2, ry); mesh.castShadow = true; mesh.receiveShadow = true;
-    worldGroup.add(mesh);
-    rocksData.push({ x: rx, y: ry, radius: size * 0.8 });
   }
 }
 
@@ -293,7 +253,7 @@ function updateBlood(dt) {
 
 function damagePlayer(amount) { if (state.gameOver) return; state.player.hp -= amount; updateHPBar(); if (state.player.hp <= 0) { state.player.hp = 0; endGame(false); } }
 function updateHPBar() { const hp = Math.max(0, state.player ? state.player.hp : 100); const bar = document.getElementById('hpBar'); const txt = document.getElementById('hpText'); if (bar) { bar.style.width = hp + '%'; bar.classList.remove('low','mid'); if (hp < 30) bar.classList.add('low'); else if (hp < 60) bar.classList.add('mid'); } if (txt) txt.textContent = Math.round(hp); }
-function onBotKilled(bot, fromId) { if (bot.mesh) worldGroup.remove(bot.mesh); if (bot.shadow) worldGroup.remove(bot.shadow); state.alive--; if (fromId === 'player') { state.kills++; addKillFeed('YOU ☠ ' + bot.name); } else addKillFeed(bot.name + ' ☠'); updateAliveHUD(); updateKillsHUD(); spawnBlood(bot.x, bot.y); if (state.alive <= 1 && !state.gameOver) endGame(true); }
+function onBotKilled(bot, fromId) { if (bot.mesh) worldGroup.remove(bot.mesh); if (bot.shadow) worldGroup.remove(bot.shadow); state.alive--; if (fromId === 'player') { state.kills++; addKillFeed('YOU ☠ ' + bot.name); } else addKillFeed(bot.name + ' ☠'); updateAliveHUD(); updateKillsHUD(); spawnBlood(bot.x, bot.y); if (state.alive <= 1 && !state.gameOver && state.bots.length > 0) endGame(true); }
 function updateAliveHUD() { const el = document.getElementById('aliveCount'); if (el) el.textContent = state.alive; }
 function updateKillsHUD() { const el = document.getElementById('killCount'); if (el) el.textContent = state.kills; }
 function addKillFeed(text) { const feed = document.getElementById('killFeed'); if (!feed) return; const div = document.createElement('div'); div.className = 'kill-item'; div.textContent = text; feed.appendChild(div); setTimeout(() => div.classList.add('fade'), 2500); setTimeout(() => div.remove(), 3200); }
@@ -310,7 +270,7 @@ function updatePlayer(dt) {
   
   p.x += ix * p.speed * dt; p.y += iy * p.speed * dt;
   
-  window.MAP.resolveCollisions(p, rocksData);
+  window.MAP.resolveCollisions(p, null);
 
   p.x = Math.max(p.radius, Math.min(window.MAP.WORLD_W - p.radius, p.x)); p.y = Math.max(p.radius, Math.min(window.MAP.WORLD_H - p.radius, p.y));
   if (mag > 0.1) p.walkFrame += dt * 8;
@@ -341,7 +301,7 @@ function updateCamera(dt) {
   camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 10); 
   camera.position.y = camHeight; 
   camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 10); 
-  camera.lookAt(p.x, 20, p.y); // Look slightly ahead
+  camera.lookAt(p.x, 20, p.y);
 
   const sun = scene.getObjectByName('sun'); if (sun) { sun.position.set(p.x + 500, 1200, p.y + 400); sun.target.position.set(p.x, 0, p.y); sun.target.updateMatrixWorld(); }
 }
@@ -358,7 +318,7 @@ function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (!state.gameOver) {
     updatePlayer(dt);
-    for (const b of state.bots) { b.update(dt, state.player, window.MAP); window.MAP.resolveCollisions(b, rocksData); }
+    for (const b of state.bots) { b.update(dt, state.player, window.MAP); }
     updateBullets(dt); updateBlood(dt);
   }
   updateCamera(dt);
