@@ -1,5 +1,5 @@
 // ============================================
-// GAME.JS v10 — BUILDING THE SKETCH
+// GAME.JS v11 — TRUE POV + FULL CONTRAST
 // ============================================
 
 let renderer, scene, camera;
@@ -44,21 +44,30 @@ async function boot3D(config) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  
+  // --- FIX CONTRAST WASHOUT ---
+  renderer.outputEncoding = THREE.sRGBEncoding; 
+  renderer.toneMapping = THREE.NoToneMapping;
+
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
-  scene.fog = new THREE.Fog(0x87a9c9, 1200, 3500);
+  scene.fog = new THREE.Fog(0x87a9c9, 1500, 4000);
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 8000);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.5));
-  const sun = new THREE.DirectionalLight(0xfff2d8, 0.85);
-  sun.position.set(400, 1200, 300);
+  // Reduced ambient light so shadows pop
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x3a2f22, 0.4));
+  
+  const sun = new THREE.DirectionalLight(0xfff2d8, 0.9);
+  sun.position.set(500, 1500, 500);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -2000; sun.shadow.camera.right = 2000;
+  sun.shadow.camera.top = 2000; sun.shadow.camera.bottom = -2000;
   sun.name = 'sun';
   scene.add(sun);
   scene.add(sun.target);
@@ -70,8 +79,8 @@ async function boot3D(config) {
   buildZones();
   buildRocks();
 
-  // Spawn at Meeraghati (Center)
-  state.player = createPlayer(config, { x: 1800, y: 2000 });
+  // Spawn at Karan (Center)
+  state.player = createPlayer(config, { x: 2200, y: 2200 });
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
@@ -93,15 +102,20 @@ async function boot3D(config) {
   requestAnimationFrame(loop);
 }
 
-// BUILD THE ROADS & GROUND (Matching your sketch)
+// BUILD THE ROADS & GRASS
 function buildMap() {
-  // 1. Grass Base
+  // 1. Massive Grass Base (Fills ALL white space)
   const grassImg = window.MAP.imageCache['tile_grass'];
   if (grassImg) {
-    const tex = new THREE.Texture(grassImg); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(40, 40); tex.needsUpdate = true;
+    const tex = new THREE.Texture(grassImg); 
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; 
+    tex.repeat.set(60, 60); 
+    tex.needsUpdate = true;
     const geo = new THREE.PlaneGeometry(window.MAP.WORLD_W, window.MAP.WORLD_H);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
-    mesh.rotation.x = -Math.PI / 2; mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
+    mesh.rotation.x = -Math.PI / 2; 
+    mesh.position.set(window.MAP.WORLD_W/2, 0, window.MAP.WORLD_H/2);
+    mesh.receiveShadow = true;
     worldGroup.add(mesh);
   }
 
@@ -110,40 +124,43 @@ function buildMap() {
     if (!img) return;
     const tex = new THREE.Texture(img); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true;
     
+    // Repeat based on length
     if (config.w > config.h) tex.repeat.set(config.w / 200, 1);
     else tex.repeat.set(1, config.h / 200);
 
     const geo = new THREE.PlaneGeometry(config.w, config.h);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
     mesh.rotation.x = -Math.PI / 2;
-    if (config.rot) mesh.rotation.z = config.rot * (Math.PI / 180);
     mesh.position.set(config.x, yOffset, config.y);
     worldGroup.add(mesh);
   };
 
-  // 2. Build Roads
+  // 2. Build Roads using Horizontal and Vertical tiles
   window.MAP.ROADS.forEach(r => {
-    if (r.type === 'horizontal') placePiece('tile_horizontal', r, 0.1);
-    else if (r.type === 'vertical') placePiece('tile_vertical', r, 0.1);
-    else if (r.type === 'turn') placePiece('tile_turn', r, 0.1);
+    if (r.w > r.h) placePiece('tile_horizontal', r, 0.1);
+    else placePiece('tile_vertical', r, 0.1);
   });
 
   // 3. Build Rails
   window.MAP.RAILS.forEach(r => placePiece('tile_rail', r, 0.15)); 
-
-  // 4. Build Rivers
-  window.MAP.RIVERS.forEach(r => placePiece('tile_water', r, 0.05));
 }
 
-// BUILD ZONES
+// BUILD ZONES (Fixing contrast!)
 function buildZones() {
   for (const z of window.MAP.ZONES) {
     const img = window.MAP.imageCache['zone_' + z.id];
     if (!img) continue;
-    const tex = new THREE.Texture(img); tex.needsUpdate = true; tex.anisotropy = 8;
+    
+    const tex = new THREE.Texture(img); 
+    tex.encoding = THREE.sRGBEncoding; // Fix color washout
+    tex.needsUpdate = true; 
+    tex.anisotropy = 8;
+    
     const geo = new THREE.PlaneGeometry(z.size, z.size);
-    // depthWrite: false ensures player renders ON TOP of the flat image
-    const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, depthWrite: false });
+    
+    // MeshBasicMaterial ignores lights -> 100% perfect contrast of your images
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+    
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(z.x, 0.2, z.y); 
@@ -166,7 +183,7 @@ function buildZones() {
 function buildRocks() {
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 1 });
   rocksData = [];
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 60; i++) {
     const rx = 400 + Math.random() * (window.MAP.WORLD_W - 800);
     const ry = 400 + Math.random() * (window.MAP.WORLD_H - 800);
     const size = 15 + Math.random() * 20;
@@ -314,11 +331,18 @@ function getPlayerSpriteName(p) {
   if (Math.hypot(ix, iy) > 0.1) return pre + '_hold.png'; return pre + '_stand.png';
 }
 
+// --- TRUE POV CAMERA ---
 function updateCamera(dt) {
   const p = state.player; 
-  const camHeight = 220; const camDist = 180; // Close POV
+  const camHeight = 150; // Very low camera
+  const camDist = 120;   // Very close to the player
   const tx = p.x, tz = p.y + camDist;
-  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 7); camera.position.y = camHeight; camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 7); camera.lookAt(p.x, 15, p.y);
+  
+  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 10); 
+  camera.position.y = camHeight; 
+  camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 10); 
+  camera.lookAt(p.x, 20, p.y); // Look slightly ahead
+
   const sun = scene.getObjectByName('sun'); if (sun) { sun.position.set(p.x + 500, 1200, p.y + 400); sun.target.position.set(p.x, 0, p.y); sun.target.updateMatrixWorld(); }
 }
 
