@@ -1,5 +1,5 @@
 // ============================================
-// GAME.JS v12 — EXPLORE MODE + POV + BOX COLLISION
+// GAME.JS v13 — SWIM & ZONE COLLISION
 // ============================================
 
 let renderer, scene, camera;
@@ -48,7 +48,7 @@ async function boot3D(config) {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87a9c9);
-  scene.fog = new THREE.Fog(0x87a9c9, 1000, 3000);
+  scene.fog = new THREE.Fog(0x87a9c9, 1200, 3500);
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 8000);
 
@@ -72,7 +72,6 @@ async function boot3D(config) {
   worldGroup.add(state.player.mesh);
   worldGroup.add(state.player.shadow);
 
-  // EXPLORE MODE CHECK
   if (config.mode !== 'explore') {
     state.bots = window.BOT.spawnBots(5, { x: state.player.x, y: state.player.y }, window.MAP);
     for (const b of state.bots) {
@@ -83,7 +82,6 @@ async function boot3D(config) {
     state.alive = state.bots.length + 1;
   } else {
     state.alive = 1;
-    console.log('[KARNAL] Explore Mode: 0 bots spawned.');
   }
   
   updateAliveHUD();
@@ -135,12 +133,11 @@ function buildZones() {
     if (!img) continue;
     
     const tex = new THREE.Texture(img); 
-    tex.encoding = THREE.sRGBEncoding; // Fix contrast
+    tex.encoding = THREE.sRGBEncoding; 
     tex.needsUpdate = true; 
     tex.anisotropy = 8;
     
     const geo = new THREE.PlaneGeometry(z.size, z.size);
-    // Full contrast, ignores shadows
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
     
     const mesh = new THREE.Mesh(geo, mat);
@@ -185,7 +182,7 @@ function createPlayer(config, spawn) {
   const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(12, 20), shadowMat);
   shadow.rotation.x = -Math.PI / 2; shadow.position.set(spawn.x, 0.3, spawn.y);
-  return { x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 12, speed: 280, mesh, shadow, sprite, charFolder: folder, prefix, ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12, walkFrame: 0, config };
+  return { x: spawn.x, y: spawn.y, angle: 0, hp: 100, maxHp: 100, radius: 12, speed: 280, mesh, shadow, sprite, charFolder: folder, prefix, ammo: 30, maxAmmo: 30, reloadTimer: 0, reloadDuration: 1.8, shootCooldown: 0, fireRate: 0.12, walkFrame: 0, inWater: false, config };
 }
 
 function buildBotMesh(bot) {
@@ -267,8 +264,14 @@ function updatePlayer(dt) {
   if (controls.keys['w'] || controls.keys['arrowup']) iy -= 1; if (controls.keys['s'] || controls.keys['arrowdown']) iy += 1; if (controls.keys['a'] || controls.keys['arrowleft']) ix -= 1; if (controls.keys['d'] || controls.keys['arrowright']) ix += 1;
   if (controls.move.dx || controls.move.dy) { ix = controls.move.dx; iy = controls.move.dy; }
   const mag = Math.hypot(ix, iy); if (mag > 1) { ix /= mag; iy /= mag; }
+
+  // SWIM LOGIC
+  p.inWater = window.MAP.isInWater(p.x, p.y);
+  let currentSpeed = p.speed;
+  if (p.inWater) currentSpeed = p.speed * 0.45; // 55% slower in water
   
-  p.x += ix * p.speed * dt; p.y += iy * p.speed * dt;
+  p.x += ix * currentSpeed * dt; 
+  p.y += iy * currentSpeed * dt;
   
   window.MAP.resolveCollisions(p, null);
 
@@ -281,28 +284,36 @@ function updatePlayer(dt) {
     spawnBullet(bx, by, p.angle + spread, 'player', 'player', 18); p.ammo--; p.shootCooldown = p.fireRate; updateAmmoHUD(); if (p.ammo === 0) p.reloadTimer = p.reloadDuration;
   }
   p.mesh.position.set(p.x, 20, p.y); p.shadow.position.set(p.x, 0.3, p.y);
+  
   const spriteName = getPlayerSpriteName(p); const newTex = loadSpriteTexture('assets/' + p.charFolder + '/' + spriteName);
   if (p.sprite.material.map !== newTex) { p.sprite.material.map = newTex; p.sprite.material.needsUpdate = true; }
 }
 
 function getPlayerSpriteName(p) {
-  const pre = p.prefix; if (p.reloadTimer > 0) return pre + '_reload.png'; if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) return pre + '_machine.png'; if (controls.aim.firing || controls.keys[' ']) return pre + '_machine.png';
-  const ix = controls.move.dx || (controls.keys['d'] ? 1 : (controls.keys['a'] ? -1 : 0)); const iy = controls.move.dy || (controls.keys['s'] ? 1 : (controls.keys['w'] ? -1 : 0));
-  if (Math.hypot(ix, iy) > 0.1) return pre + '_hold.png'; return pre + '_stand.png';
+  const pre = p.prefix; 
+  
+  // If swimming, ideally we'd have a swim sprite. 
+  // For now, we force the walk/hold sprite if moving in water.
+  if (p.inWater) {
+    if (Math.hypot(controls.move.dx || 0, controls.move.dy || 0) > 0.1 || controls.keys['w'] || controls.keys['a'] || controls.keys['s'] || controls.keys['d']) {
+      return pre + '_hold.png';
+    }
+  }
+
+  if (p.reloadTimer > 0) return pre + '_reload.png'; 
+  if (controls.aim.active && (controls.aim.dx || controls.aim.dy)) return pre + '_machine.png'; 
+  if (controls.aim.firing || controls.keys[' ']) return pre + '_machine.png';
+  const ix = controls.move.dx || (controls.keys['d'] ? 1 : (controls.keys['a'] ? -1 : 0)); 
+  const iy = controls.move.dy || (controls.keys['s'] ? 1 : (controls.keys['w'] ? -1 : 0));
+  if (Math.hypot(ix, iy) > 0.1) return pre + '_hold.png'; 
+  return pre + '_stand.png';
 }
 
-// --- TRUE POV CAMERA ---
 function updateCamera(dt) {
   const p = state.player; 
-  const camHeight = 150; // Very low camera
-  const camDist = 120;   // Very close to the player
+  const camHeight = 150; const camDist = 120; 
   const tx = p.x, tz = p.y + camDist;
-  
-  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 10); 
-  camera.position.y = camHeight; 
-  camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 10); 
-  camera.lookAt(p.x, 20, p.y);
-
+  camera.position.x += (tx - camera.position.x) * Math.min(1, dt * 10); camera.position.y = camHeight; camera.position.z += (tz - camera.position.z) * Math.min(1, dt * 10); camera.lookAt(p.x, 20, p.y);
   const sun = scene.getObjectByName('sun'); if (sun) { sun.position.set(p.x + 500, 1200, p.y + 400); sun.target.position.set(p.x, 0, p.y); sun.target.updateMatrixWorld(); }
 }
 
